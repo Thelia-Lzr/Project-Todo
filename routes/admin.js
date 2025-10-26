@@ -210,9 +210,9 @@ router.delete('/users/:id', authMiddleware, verifyAdmin, async (req, res) => {
         const db = await getDB();
         const userId = parseInt(req.params.id);
 
-        // 检查是否是Thelia用户
+        // 检查用户是否存在
         const user = await new Promise((resolve, reject) => {
-            db.get('SELECT username FROM users WHERE id = ?', [userId], (err, row) => {
+            db.get('SELECT id FROM users WHERE id = ?', [userId], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -225,10 +225,11 @@ router.delete('/users/:id', authMiddleware, verifyAdmin, async (req, res) => {
             });
         }
 
-        if (user.username === 'Thelia') {
+        // 不能删除管理员（第一个用户）
+        if (userId === 1) {
             return res.status(403).json({ 
                 success: false, 
-                message: '不能删除Thelia用户' 
+                message: '不能删除管理员账号' 
             });
         }
 

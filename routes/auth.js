@@ -115,85 +115,88 @@ router.post('/register', async (req, res) => {
             });
         }
 
-        // 加密密码
-        try {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            
-            const db = await getDB();
+        const db = await getDB();
 
-            // 创建用户
-            db.run(
-                'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
-                [username, hashedPassword, email || null],
-                async function(err) {
-                    if (err) {
-                        db.close();
-                        if (err.message.includes('UNIQUE constraint')) {
-                            return res.status(409).json({
+        // 检查是否已有用户（只允许创建第一个管理员用户）
+        db.get('SELECT COUNT(*) as count FROM users', [], async (err, result) => {
+            if (err) {
+                db.close();
+                return res.status(500).json({
+                    success: false,
+                    message: '数据库错误'
+                });
+            }
+
+            if (result && result.count > 0) {
+                db.close();
+                return res.status(403).json({
+                    success: false,
+                    message: '注册功能已关闭。管理员账号已存在，其他用户请联系管理员创建账号。'
+                });
+            }
+
+            // 加密密码
+            try {
+                const hashedPassword = await bcrypt.hash(password, 10);
+                
+                // 创建第一个用户（管理员）
+                db.run(
+                    'INSERT INTO users (username, password, email) VALUES (?, ?, ?)',
+                    [username, hashedPassword, email || null],
+                    async function(err) {
+                        if (err) {
+                            db.close();
+                            if (err.message.includes('UNIQUE constraint')) {
+                                return res.status(409).json({
+                                    success: false,
+                                    message: '用户名已存在'
+                                });
+                            }
+                            return res.status(500).json({
                                 success: false,
-                                message: '用户名已存在'
+                                message: '创建用户失败'
                             });
                         }
-                        return res.status(500).json({
-                            success: false,
-                            message: '创建用户失败'
-                        });
-                    }
 
-                    const userId = this.lastID;
+                        const userId = this.lastID;
 
-                    // 检查是否是第一个用户（管理员）
-                    db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
-                        if (err) {
-                            console.error('❌ 检查用户数量失败:', err);
-                        }
-
-                        const isFirstUser = result && result.count === 1;
-                        
-                        // 第一个用户（管理员）获得无限制权限，其他用户获得30天限时权限
-                        const permissionType = isFirstUser ? 'UNLIMITED' : 'LIMITED';
-                        const limitDays = isFirstUser ? null : 30;
-                        const expiresAt = isFirstUser ? null : (() => {
-                            const date = new Date();
-                            date.setDate(date.getDate() + 30);
-                            return date.toISOString();
-                        })();
-
+                        // 第一个用户（管理员）获得无限制AI权限
                         db.run(
                             'INSERT INTO ai_permissions (user_id, permission_type, limit_days, expires_at) VALUES (?, ?, ?, ?)',
-                            [userId, permissionType, limitDays, expiresAt],
+                            [userId, 'UNLIMITED', null, null],
                             (err) => {
                                 db.close();
                                 if (err) {
                                     console.error('❌ 创建权限记录失败:', err);
-                                } else if (isFirstUser) {
-                                    console.log('✅ 第一个用户已注册为管理员，授予无限制AI权限');
+                                } else {
+                                    console.log('✅ 管理员账号已创建，授予无限制AI权限');
                                 }
 
                                 // 生成令牌
                                 const token = generateToken(userId, username);
                                 res.status(201).json({
                                     success: true,
-                                    message: isFirstUser ? '注册成功！您是第一个用户，已获得管理员权限和无限制AI使用权限' : '注册成功',
+                                    message: '✨ 管理员账号创建成功！您是第一个用户，拥有管理员权限和无限制AI使用权限。',
                                     token,
                                     user: {
                                         id: userId,
                                         username,
                                         email: email || null,
-                                        isAdmin: isFirstUser
+                                        isAdmin: true
                                     }
                                 });
                             }
                         );
-                    });
-                }
-            );
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: '密码加密失败'
-            });
-        }
+                    }
+                );
+            } catch (error) {
+                db.close();
+                res.status(500).json({
+                    success: false,
+                    message: '密码加密失败'
+                });
+            }
+        });
     } catch (error) {
         res.status(500).json({
             success: false,
