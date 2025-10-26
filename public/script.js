@@ -6,6 +6,7 @@ class TodoApp {
         this.apiBaseURL = '/api';
         this.pythonBaseURL = '/api';  // Python后端（通过代理）
         this.token = this.getToken();
+        this.userId = this.getUserId();  // 从localStorage获取用户ID
         this.todos = [];
         // API Key 将从后端自动获取
         this.geminiApiKey = '';
@@ -24,10 +25,15 @@ class TodoApp {
         if (this.token) {
             this.showAppPage();
             
-            // ✅ 关键修复：页面刷新时从 localStorage 恢复用户名
+            // ✅ 关键修复：页面刷新时从 localStorage 恢复用户名和用户ID
             const savedUsername = this.getUsername();
             if (savedUsername) {
                 this.setCurrentUser(savedUsername);
+            }
+            
+            const savedUserId = this.getUserId();
+            if (savedUserId) {
+                this.userId = savedUserId;
             }
             
             this.loadTodos();
@@ -201,7 +207,9 @@ class TodoApp {
             // 保存令牌和用户名
             this.saveToken(data.token);
             this.saveUsername(username);  // ✅ 新增：保存用户名
+            this.saveUserId(data.user.id);  // ✅ 保存用户ID用于API使用记录
             this.token = data.token;
+            this.userId = data.user.id;
 
             // 切换到应用页面
             this.showAppPage();
@@ -228,7 +236,9 @@ class TodoApp {
         if (confirm('确定要退出登录吗？')) {
             this.removeToken();
             this.removeUsername();  // ✅ 新增：登出时也移除用户名
+            this.removeUserId();  // ✅ 新增：登出时也移除用户ID
             this.token = null;
+            this.userId = null;
             this.todos = [];
             this.stopPermissionCountdown();
             
@@ -282,6 +292,22 @@ class TodoApp {
         localStorage.removeItem('todolistUsername');
     }
 
+    // ✅ 新增：保存用户ID到 localStorage（用于API使用记录）
+    saveUserId(userId) {
+        localStorage.setItem('todolistUserId', userId);
+    }
+
+    // ✅ 新增：从 localStorage 获取用户ID
+    getUserId() {
+        const id = localStorage.getItem('todolistUserId');
+        return id ? parseInt(id) : null;
+    }
+
+    // ✅ 新增：移除保存的用户ID
+    removeUserId() {
+        localStorage.removeItem('todolistUserId');
+    }
+
     // ========== Gemini AI 集成 ==========
 
     saveGeminiApiKey(key) {
@@ -305,6 +331,12 @@ class TodoApp {
     }
 
     async initAIChat() {
+        // 如果用户未登录或没有 userId，则不初始化 AI（避免匿名请求）
+        if (!this.token || !this.userId) {
+            console.warn('⚠️ initAIChat 已跳过：用户未登录或 userId 缺失');
+            return false;
+        }
+
         // 自动从后端获取API Key
         if (!this.geminiApiKey) {
             try {
@@ -535,6 +567,38 @@ class TodoApp {
             this.showLoginPage();
             return;
         }
+        // 额外检查：如果 userId 缺失，尝试通过 token 同步恢复（避免匿名请求）
+        if (!this.userId && this.token) {
+            try {
+                console.log('🔄 未检测到 userId，尝试通过 token 恢复...');
+                const verifyResp = await fetch(`${this.apiBaseURL}/auth/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: this.token })
+                });
+                if (verifyResp.ok) {
+                    const verifyData = await verifyResp.json();
+                    if (verifyData.success && verifyData.user && verifyData.user.id) {
+                        this.userId = verifyData.user.id;
+                        this.saveUserId(this.userId);
+                        console.log('✅ 通过 token 恢复到 userId:', this.userId);
+                    } else {
+                        console.warn('⚠️ token 恢复未返回用户信息', verifyData);
+                    }
+                } else {
+                    console.warn('⚠️ token 恢复请求失败', verifyResp.status);
+                }
+            } catch (e) {
+                console.warn('⚠️ 通过 token 恢复 userId 时出错:', e);
+            }
+        }
+
+        // 如果仍然没有 userId，则阻止发送以避免匿名请求
+        if (!this.userId) {
+            this.showChatError('❌ 请先登录（或刷新页面）以获取用户信息');
+            this.showLoginPage();
+            return;
+        }
         
         if (!this.chatSession) {
             this.showChatError('AI 助手未连接，请先配置 API Key');
@@ -577,6 +641,7 @@ class TodoApp {
             // 调用Python后端的聊天API
             console.log('📡 发送消息到 AI 后端...');
             console.log('📍 API URL:', `${this.pythonBaseURL}/gemini/chat`);
+            console.log('🔍 发送user_id:', this.userId);
             
             // 添加当前时间信息 - 帮助AI进行时间判断（显示用户本地时区）
             const currentTimeInfo = `[当前客户端时间: ${TimeUtils.formatDateTime(TimeUtils.toUTC())}]`;
@@ -853,6 +918,26 @@ class TodoApp {
                     if (sessionExists) {
                         this.sessionId = savedSession;
                         console.log(`✅ 会话验证成功，使用会话 ID: ${savedSession}`);
+                        // 确保 userId 已初始化（如果未初始化则通过令牌向后端验证获取用户ID）
+                        if (!this.userId && this.token) {
+                            try {
+                                const verifyResp2 = await fetch(`${this.apiBaseURL}/auth/verify`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ token: this.token })
+                                });
+                                if (verifyResp2.ok) {
+                                    const verifyData = await verifyResp2.json();
+                                    if (verifyData.success && verifyData.user && verifyData.user.id) {
+                                        this.userId = verifyData.user.id;
+                                        this.saveUserId(this.userId);
+                                        console.log('✅ 通过令牌恢复 userId:', this.userId);
+                                    }
+                                }
+                            } catch (e) {
+                                console.warn('⚠️ 恢复 userId 失败:', e);
+                            }
+                        }
                         return;
                     } else {
                         console.warn('⚠️ 本地会话已失效，清除缓存');
@@ -876,6 +961,26 @@ class TodoApp {
                     this.sessionId = data.sessions[0].session_id;
                     localStorage.setItem('todolistChatSession_' + usernameKey, this.sessionId);
                     console.log(`✅ 使用现有会话 ID: ${this.sessionId}`);
+                    // 如果 userId 为空，尝试通过令牌恢复
+                    if (!this.userId && this.token) {
+                        try {
+                            const verifyResp3 = await fetch(`${this.apiBaseURL}/auth/verify`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ token: this.token })
+                            });
+                            if (verifyResp3.ok) {
+                                const verifyData = await verifyResp3.json();
+                                if (verifyData.success && verifyData.user && verifyData.user.id) {
+                                    this.userId = verifyData.user.id;
+                                    this.saveUserId(this.userId);
+                                    console.log('✅ 通过令牌恢复 userId:', this.userId);
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ 恢复 userId 失败:', e);
+                        }
+                    }
                     return;
                 }
             }

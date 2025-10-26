@@ -551,7 +551,7 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
         // 调用 Gemini API 获取模型信息来验证 API Key 有效性
         try {
             const response = await axios.get(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp?key=${apiKey}`
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash?key=${apiKey}`
             );
             
             if (response.data) {
@@ -583,7 +583,7 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                             rpm: '15 次/分钟 (免费版)',
                             tpm: '1,000,000 tokens/分钟',
                             rpd: '1,500 次/天',
-                            note: 'Gemini 2.0 Flash 免费版限制'
+                            note: 'Gemini 2.5 Flash 免费版限制'
                         },
                         features: [
                             '✅ 文本生成',

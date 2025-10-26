@@ -92,10 +92,19 @@ def gemini_chat():
     """处理Gemini AI聊天请求"""
     try:
         data = request.json
+        try:
+            masked = dict(data) if isinstance(data, dict) else {}
+            if 'api_key' in masked:
+                masked['api_key'] = '***'
+            print(f"🔍 调试 - 收到的完整请求数据 (masked): {masked}")
+        except Exception:
+            print("🔍 调试 - 收到的完整请求数据: <unprintable>")
         user_message = data.get('message')
         session_id = data.get('session_id', 'default')
         api_key = data.get('api_key')
         todo_context = data.get('todo_context', '')
+        user_id = data.get('user_id')
+        print(f"🔍 调试 - 解析后的user_id: {user_id}, 类型: {type(user_id)}")
         
         if not user_message:
             return jsonify({
@@ -310,32 +319,95 @@ def gemini_chat():
         full_message = f"{system_prompt}\n\n用户消息: {user_message}"
         response = chat.send_message(full_message)
         
-        # 记录API使用情况
+        # 记录API使用情况（增强：即使没有usage_metadata或user_id也会记录，便于统计请求次数）
         try:
             user_id = data.get('user_id')
-            if user_id and hasattr(response, 'usage_metadata'):
-                usage = response.usage_metadata
-                import sqlite3
-                db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.db')
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                
-                cursor.execute('''
-                    INSERT INTO api_usage (user_id, request_tokens, response_tokens, total_tokens, model_name)
-                    VALUES (?, ?, ?, ?, ?)
-                ''', (
-                    user_id,
-                    usage.prompt_token_count if hasattr(usage, 'prompt_token_count') else 0,
-                    usage.candidates_token_count if hasattr(usage, 'candidates_token_count') else 0,
-                    usage.total_token_count if hasattr(usage, 'total_token_count') else 0,
-                    MODEL_NAME
-                ))
-                
-                conn.commit()
-                conn.close()
-                print(f"✅ 记录API使用: {usage.total_token_count if hasattr(usage, 'total_token_count') else 0} tokens")
+            print(f"🔍 调试 - user_id: {user_id}")
+            print(f"🔍 调试 - response类型: {type(response)}")
+            print(f"🔍 调试 - response所有属性: {dir(response)}")
+
+            # 如果前端未提供 user_id，尝试从 session_id 中推断用户名并查询用户ID（例如 session_id: Thelia_123...）
+            try:
+                if (user_id is None or user_id == '') and session_id:
+                    possible_name = None
+                    if isinstance(session_id, str) and '_' in session_id:
+                        possible_name = session_id.split('_', 1)[0]
+                    if possible_name:
+                        try:
+                            # 查询 users 表获取 id
+                            import sqlite3 as _sqlite
+                            db_path_tmp = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.db')
+                            conn_tmp = _sqlite.connect(db_path_tmp)
+                            cur_tmp = conn_tmp.cursor()
+                            cur_tmp.execute('SELECT id FROM users WHERE username = ? LIMIT 1', (possible_name,))
+                            row = cur_tmp.fetchone()
+                            conn_tmp.close()
+                            if row:
+                                user_id = row[0]
+                                print(f"🔍 调试 - 从session_id推断到user_id: {user_id} (username={possible_name})")
+                        except Exception as e:
+                            print(f"🔍 调试 - 从session_id推断user_id时出错: {e}")
+            except Exception as e:
+                print(f"🔍 调试 - session_id推断user_id失败: {e}")
+
+            # 获取响应文本（兼容多种response结构）
+            resp_text = ''
+            try:
+                if hasattr(response, 'text') and response.text:
+                    resp_text = response.text
+                else:
+                    # 尝试从内部_result -> candidates -> content -> parts 中提取文本
+                    parts = []
+                    if hasattr(response, '_result') and response._result:
+                        res = response._result
+                        if hasattr(res, 'candidates') and res.candidates:
+                            for c in getattr(res, 'candidates') or []:
+                                # content.parts
+                                if hasattr(c, 'content') and getattr(c, 'content') is not None:
+                                    content = c.content
+                                    if hasattr(content, 'parts') and content.parts:
+                                        for p in getattr(content, 'parts') or []:
+                                            if hasattr(p, 'text'):
+                                                parts.append(p.text)
+                    if parts:
+                        resp_text = '\n'.join(parts)
+            except Exception as e:
+                print(f"🔍 调试 - 提取响应文本失败: {e}")
+
+            # 估算token（简化为词数统计，确保能记录请求次数和大致消耗）
+            import re, sqlite3
+            def word_count(s):
+                return len(re.findall(r"\S+", s)) if s else 0
+
+            request_tokens = word_count(user_message) if user_message else 0
+            response_tokens = word_count(resp_text)
+            total_tokens = request_tokens + response_tokens
+
+            # 如果没有user_id，使用0作为匿名用户ID，仍然记录以统计请求量
+            uid = user_id if (user_id is not None) else 0
+
+            db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.db')
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO api_usage (user_id, request_tokens, response_tokens, total_tokens, model_name)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                uid,
+                request_tokens,
+                response_tokens,
+                total_tokens,
+                MODEL_NAME
+            ))
+
+            conn.commit()
+            conn.close()
+            print(f"✅ 记录API使用: request={request_tokens}, response={response_tokens}, total={total_tokens} (用户ID: {uid})")
         except Exception as log_error:
             print(f"⚠️  记录API使用失败: {log_error}")
+            import traceback
+            traceback.print_exc()
         
         return jsonify({
             'success': True,
