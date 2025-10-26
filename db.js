@@ -92,38 +92,71 @@ async function initDatabase() {
                                     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
                                     FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
                                 )
-                            `, async (err) => {
+                            `, (err) => {
                                 if (err && !err.message.includes('already exists')) {
                                     reject(err);
                                     return;
                                 }
 
-                                // 创建索引以优化查询性能
-                                db.run('CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)', (err) => {
+                                // 创建API使用记录表
+                                db.run(`
+                                    CREATE TABLE IF NOT EXISTS api_usage (
+                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                        user_id INTEGER NOT NULL,
+                                        request_tokens INTEGER DEFAULT 0,
+                                        response_tokens INTEGER DEFAULT 0,
+                                        total_tokens INTEGER DEFAULT 0,
+                                        model_name TEXT,
+                                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                                    )
+                                `, (err) => {
                                     if (err && !err.message.includes('already exists')) {
                                         reject(err);
                                         return;
                                     }
 
-                                    db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id)', (err) => {
+                                    // 创建索引以优化查询性能
+                                    db.run('CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)', (err) => {
                                         if (err && !err.message.includes('already exists')) {
                                             reject(err);
                                             return;
                                         }
 
-                                        db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)', (err) => {
+                                        db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id)', (err) => {
                                             if (err && !err.message.includes('already exists')) {
                                                 reject(err);
                                                 return;
                                             }
 
-                                            // 创建初始用户
-                                            createInitialUser(db).then(() => {
-                                                db.close();
-                                                resolve();
-                                            }).catch((error) => {
-                                                db.close();
-                                                reject(error);
+                                            db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)', (err) => {
+                                                if (err && !err.message.includes('already exists')) {
+                                                    reject(err);
+                                                    return;
+                                                }
+
+                                                db.run('CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id)', (err) => {
+                                                    if (err && !err.message.includes('already exists')) {
+                                                        reject(err);
+                                                        return;
+                                                    }
+
+                                                    db.run('CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at)', (err) => {
+                                                        if (err && !err.message.includes('already exists')) {
+                                                            reject(err);
+                                                            return;
+                                                        }
+
+                                                        // 创建初始用户
+                                                        createInitialUser(db).then(() => {
+                                                            db.close();
+                                                            resolve();
+                                                        }).catch((error) => {
+                                                            db.close();
+                                                            reject(error);
+                                                        });
+                                                    });
+                                                });
                                             });
                                         });
                                     });

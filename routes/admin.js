@@ -509,6 +509,45 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
 
         const apiKey = match[1].trim();
         
+        // 获取本地使用统计
+        const db = await getDB();
+        
+        // 今天的使用统计
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        
+        const todayStats = await new Promise((resolve, reject) => {
+            db.get(`
+                SELECT 
+                    COUNT(*) as request_count,
+                    SUM(total_tokens) as total_tokens
+                FROM api_usage 
+                WHERE created_at >= datetime('now', 'start of day')
+            `, (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        // 当前分钟的使用统计
+        const currentMinuteStart = new Date();
+        currentMinuteStart.setSeconds(0, 0);
+        
+        const minuteStats = await new Promise((resolve, reject) => {
+            db.get(`
+                SELECT 
+                    COUNT(*) as request_count,
+                    SUM(total_tokens) as total_tokens
+                FROM api_usage 
+                WHERE created_at >= datetime('now', '-1 minute')
+            `, (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        db.close();
+        
         // 调用 Gemini API 获取模型信息来验证 API Key 有效性
         try {
             const response = await axios.get(
@@ -523,6 +562,20 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                     message: 'API Key 有效且可用',
                     modelName: response.data.name,
                     displayName: response.data.displayName,
+                    usage: {
+                        today: {
+                            requests: todayStats.request_count || 0,
+                            tokens: todayStats.total_tokens || 0,
+                            requestLimit: 1500,
+                            tokenLimit: null // 每天没有token限制
+                        },
+                        currentMinute: {
+                            requests: minuteStats.request_count || 0,
+                            tokens: minuteStats.total_tokens || 0,
+                            requestLimit: 15,
+                            tokenLimit: 1000000
+                        }
+                    },
                     info: {
                         status: '正常',
                         type: 'Gemini API Free Tier',
@@ -554,6 +607,19 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                     success: true,
                     status: 'rate_limited',
                     message: 'API 已达速率限制',
+                    usage: {
+                        today: {
+                            requests: todayStats.request_count || 0,
+                            tokens: todayStats.total_tokens || 0,
+                            requestLimit: 1500
+                        },
+                        currentMinute: {
+                            requests: minuteStats.request_count || 0,
+                            tokens: minuteStats.total_tokens || 0,
+                            requestLimit: 15,
+                            tokenLimit: 1000000
+                        }
+                    },
                     info: {
                         status: '⚠️ 配额限制',
                         type: 'Gemini API Free Tier',

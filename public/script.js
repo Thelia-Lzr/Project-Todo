@@ -571,7 +571,8 @@ class TodoApp {
                     message: `${currentTimeInfo} ${message}`,
                     session_id: this.sessionId,
                     api_key: this.geminiApiKey,
-                    todo_context: todoContext
+                    todo_context: todoContext,
+                    user_id: this.userId // 添加user_id用于记录API使用
                 })
             });
 

@@ -1162,6 +1162,69 @@ body {
     border-left: 3px solid var(--success-color);
 }
 
+.usage-stats {
+    display: grid;
+    gap: 15px;
+}
+
+.usage-item {
+    padding: 15px;
+    background: var(--light-bg);
+    border-radius: 8px;
+    border-left: 3px solid var(--primary-color);
+}
+
+.usage-item.danger {
+    border-left-color: var(--danger-color);
+}
+
+.usage-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.usage-bar-container {
+    width: 100%;
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 8px 0;
+}
+
+.usage-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.usage-item.danger .usage-bar {
+    background: linear-gradient(90deg, var(--danger-color), #dc2626);
+}
+
+.usage-text {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.usage-item.danger .usage-text {
+    color: var(--danger-color);
+}
+
+.quota-update-time {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
 @media (max-width: 768px) {
     .api-key-card {
         grid-template-columns: 1fr;

@@ -308,6 +308,33 @@ def gemini_chat():
         full_message = f"{system_prompt}\n\n用户消息: {user_message}"
         response = chat.send_message(full_message)
         
+        # 记录API使用情况
+        try:
+            user_id = data.get('user_id')
+            if user_id and hasattr(response, 'usage_metadata'):
+                usage = response.usage_metadata
+                import sqlite3
+                db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'database.db')
+                conn = sqlite3.connect(db_path)
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO api_usage (user_id, request_tokens, response_tokens, total_tokens, model_name)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    user_id,
+                    usage.prompt_token_count if hasattr(usage, 'prompt_token_count') else 0,
+                    usage.candidates_token_count if hasattr(usage, 'candidates_token_count') else 0,
+                    usage.total_token_count if hasattr(usage, 'total_token_count') else 0,
+                    MODEL_NAME
+                ))
+                
+                conn.commit()
+                conn.close()
+                print(f"✅ 记录API使用: {usage.total_token_count if hasattr(usage, 'total_token_count') else 0} tokens")
+        except Exception as log_error:
+            print(f"⚠️  记录API使用失败: {log_error}")
+        
         return jsonify({
             'success': True,
             'message': response.text,

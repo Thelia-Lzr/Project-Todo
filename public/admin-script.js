@@ -84,6 +84,21 @@ class AdminApp {
         this.checkQuota();
         this.loadUsers();
         this.loadChatSessions();
+        
+        // 启动配额自动刷新（每30秒）
+        this.startQuotaAutoRefresh();
+    }
+    
+    startQuotaAutoRefresh() {
+        // 清除之前的定时器
+        if (this.quotaRefreshTimer) {
+            clearInterval(this.quotaRefreshTimer);
+        }
+        
+        // 每30秒自动刷新一次
+        this.quotaRefreshTimer = setInterval(() => {
+            this.checkQuota();
+        }, 30000); // 30秒
     }
 
     getUsername() {
@@ -626,11 +641,55 @@ class AdminApp {
                     </div>
                 `;
 
+                // 显示实时使用情况
+                if (data.usage) {
+                    html += `
+                    <div class="quota-section">
+                        <div class="quota-section-title">📊 今日使用情况</div>
+                        <div class="usage-stats">
+                            <div class="usage-item ${data.usage.today.requests >= data.usage.today.requestLimit ? 'danger' : ''}">
+                                <div class="usage-label">请求次数</div>
+                                <div class="usage-bar-container">
+                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.today.requests / data.usage.today.requestLimit) * 100)}%"></div>
+                                </div>
+                                <div class="usage-text">${data.usage.today.requests} / ${data.usage.today.requestLimit}</div>
+                            </div>
+                            ${data.usage.today.tokens ? `
+                            <div class="usage-item">
+                                <div class="usage-label">Token 使用</div>
+                                <div class="usage-text">${data.usage.today.tokens.toLocaleString()}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="quota-section">
+                        <div class="quota-section-title">⚡ 当前分钟使用情况</div>
+                        <div class="usage-stats">
+                            <div class="usage-item ${data.usage.currentMinute.requests >= data.usage.currentMinute.requestLimit ? 'danger' : ''}">
+                                <div class="usage-label">请求次数</div>
+                                <div class="usage-bar-container">
+                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.currentMinute.requests / data.usage.currentMinute.requestLimit) * 100)}%"></div>
+                                </div>
+                                <div class="usage-text">${data.usage.currentMinute.requests} / ${data.usage.currentMinute.requestLimit}</div>
+                            </div>
+                            <div class="usage-item ${data.usage.currentMinute.tokens >= data.usage.currentMinute.tokenLimit ? 'danger' : ''}">
+                                <div class="usage-label">Token 使用</div>
+                                <div class="usage-bar-container">
+                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.currentMinute.tokens / data.usage.currentMinute.tokenLimit) * 100)}%"></div>
+                                </div>
+                                <div class="usage-text">${data.usage.currentMinute.tokens.toLocaleString()} / ${data.usage.currentMinute.tokenLimit.toLocaleString()}</div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+
                 if (data.info?.limits) {
                     const limits = data.info.limits;
                     html += `
                     <div class="quota-section">
-                        <div class="quota-section-title">📊 使用限制</div>
+                        <div class="quota-section-title">� API 限制</div>
                         <div class="quota-limits">
                             <div class="quota-limit-item">
                                 <span class="limit-label">每分钟请求数</span>
@@ -660,6 +719,14 @@ class AdminApp {
                     </div>
                     `;
                 }
+                
+                // 添加更新时间
+                const now = new Date();
+                html += `
+                    <div class="quota-update-time">
+                        上次更新: ${now.toLocaleTimeString('zh-CN')} (每30秒自动刷新)
+                    </div>
+                `;
 
                 quotaDisplay.innerHTML = html;
             } else {
