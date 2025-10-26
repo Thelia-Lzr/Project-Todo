@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天窗口滚轮测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .info-box {
+            background: white;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .info-box h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .info-box p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .demo-layout {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 300px);
+            max-height: 90vh;
+        }
+
+        .demo-section {
+            flex: 1;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .demo-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .demo-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 16px;
+            background: #f9fafb;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;  /* 关键：允许正确计算高度 */
+        }
+
+        /* 自定义滚轮 */
+        .demo-content::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .demo-content::-webkit-scrollbar-track {
+            background: #f0f4f8;
+            border-radius: 10px;
+        }
+
+        .demo-content::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+            transition: background 0.3s ease;
+        }
+
+        .demo-content::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
+        }
+
+        /* Firefox */
+        .demo-content {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f0f4f8;
+        }
+
+        .demo-footer {
+            padding: 12px;
+            border-top: 1px solid #e2e8f0;
+            background: white;
+            flex-shrink: 0;
+        }
+
+        .message {
+            padding: 10px 12px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: 20%;
+            border-radius: 12px 4px 12px 12px;
+            border: none;
+        }
+
+        .message.assistant {
+            background: #e2e8f0;
+            color: #1f2937;
+            margin-right: 20%;
+            border-radius: 4px 12px 12px 12px;
+            border: none;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .input-group button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .input-group button:hover {
+            background: #5568d3;
+        }
+
+        .status {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 16px;
+            background: #dbeafe;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+            color: #1e40af;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #dcfce7;
+            border-left-color: #16a34a;
+            color: #15803d;
+        }
+
+        .code-block {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            overflow-x: auto;
+            color: #1f2937;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="info-box">
+            <h2>🔧 聊天窗口滚轮测试</h2>
+            <p>
+                此页面演示修复后的聊天窗口滚轮效果。
+                左侧为可滚动的聊天消息区域，右侧为对照区域。
+            </p>
+        </div>
+
+        <div class="demo-layout">
+            <div class="demo-section">
+                <div class="demo-header">💬 修复后的聊天窗口</div>
+                <div class="demo-content" id="chatContainer">
+                    <!-- 消息会动态生成 -->
+                </div>
+                <div class="demo-footer">
+                    <div class="input-group">
+                        <input type="text" placeholder="输入消息..." id="msgInput">
+                        <button onclick="addMessage()">发送</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="demo-section">
+                <div class="demo-header">📝 关键 CSS 修复</div>
+                <div class="demo-content" style="background: white; padding: 16px; overflow: auto;">
+                    <h3 style="color: #667eea; margin-bottom: 10px;">添加的关键属性：</h3>
+                    
+                    <h4 style="margin-top: 10px; margin-bottom: 5px;">1. ai-chat-box</h4>
+                    <div class="code-block">min-height: 0;</div>
+                    
+                    <h4 style="margin-top: 10px; margin-bottom: 5px;">2. chat-area</h4>
+                    <div class="code-block">min-height: 0;</div>
+                    
+                    <h4 style="margin-top: 10px; margin-bottom: 5px;">3. chat-messages</h4>
+                    <div class="code-block">min-height: 0;</div>
+                    
+                    <h4 style="margin-top: 10px; margin-bottom: 5px;">4. ai-header</h4>
+                    <div class="code-block">flex-shrink: 0;</div>
+                    
+                    <h4 style="margin-top: 10px; margin-bottom: 5px;">5. chat-input-area</h4>
+                    <div class="code-block">flex-shrink: 0;</div>
+
+                    <div class="status success" style="margin-top: 20px;">
+                        ✅ 这些修复确保 Flexbox 正确计算高度，
+                        从而启用滚轮显示。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-box" style="margin-top: 20px;">
+            <h2>✅ 验证步骤</h2>
+            <p><strong>1. 点击左侧窗口中的"发送"按钮</strong>，添加多条消息</p>
+            <p><strong>2. 观察</strong>：当消息超出容器高度时，应该出现灰色滚轮</p>
+            <p><strong>3. 验证滚轮样式</strong>：</p>
+            <ul style="margin: 10px 0 0 20px; color: #666;">
+                <li>✓ 宽度: 8px</li>
+                <li>✓ 默认颜色: #cbd5e0 (浅灰)</li>
+                <li>✓ 悬停颜色: #a0aec0 (深灰)</li>
+                <li>✓ 圆角: 4px</li>
+            </ul>
+            <p style="margin-top: 10px;"><strong>4. 对比</strong>：在主应用中测试相同场景</p>
+        </div>
+    </div>
+
+    <script>
+        function addMessage() {
+            const input = document.getElementById('msgInput');
+            const container = document.getElementById('chatContainer');
+            
+            if (!input.value.trim()) return;
+            
+            // 用户消息
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message user';
+            userMsg.textContent = input.value;
+            container.appendChild(userMsg);
+            
+            // AI 响应
+            setTimeout(() => {
+                const aiMsg = document.createElement('div');
+                aiMsg.className = 'message assistant';
+                aiMsg.textContent = '这是 AI 的响应消息。';
+                container.appendChild(aiMsg);
+                container.scrollTop = container.scrollHeight;
+            }, 300);
+            
+            input.value = '';
+            input.focus();
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 页面加载时添加初始消息
+        window.addEventListener('load', () => {
+            const container = document.getElementById('chatContainer');
+            
+            const messages = [
+                { text: '你好，我可以帮你什么？', type: 'assistant' },
+                { text: '请帮我管理待办事项', type: 'user' },
+                { text: '当然可以！我会帮你创建和管理待办事项列表。', type: 'assistant' },
+                { text: '请为我生成5个待办事项示例', type: 'user' },
+                { text: '好的，这是我为你生成的待办事项示例...', type: 'assistant' },
+            ];
+            
+            // 添加足够的消息使窗口溢出
+            for (let i = 0; i < 15; i++) {
+                const msg = document.createElement('div');
+                msg.className = `message ${messages[i % messages.length].type}`;
+                msg.textContent = messages[i % messages.length].text;
+                container.appendChild(msg);
+            }
+        });
+
+        // Enter 键发送
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && e.target.id === 'msgInput') {
+                addMessage();
+            }
+        });
+    </script>
+</body>
+</html>

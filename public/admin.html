@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员面板 - TodoList</title>
+    <link rel="stylesheet" href="admin-style.css">
+</head>
+<body>
+    <!-- 密码验证页面 -->
+    <div id="adminVerifyPage" class="page active">
+        <div class="verify-container">
+            <div class="verify-box">
+                <h1>🔐 管理员验证</h1>
+                <p class="verify-subtitle">请输入管理员密码以继续</p>
+                
+                <form id="verifyForm" class="verify-form">
+                    <div class="form-group">
+                        <label for="adminPassword">管理员密码</label>
+                        <input 
+                            type="password" 
+                            id="adminPassword" 
+                            name="adminPassword" 
+                            placeholder="输入密码"
+                            required
+                            autofocus
+                        >
+                    </div>
+
+                    <div id="verifyError" class="error-msg"></div>
+
+                    <button type="submit" class="btn-verify">验证</button>
+                    <button type="button" class="btn-cancel" onclick="window.location.href='/'">取消</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理员面板 -->
+    <div id="adminPanelPage" class="page">
+        <div class="admin-container">
+            <header class="admin-header">
+                <div class="header-content">
+                    <h1>📊 管理员控制面板</h1>
+                    <div class="header-actions">
+                        <span class="admin-user" id="adminUser">👑 管理员</span>
+                        <button class="btn-back" onclick="window.location.href='/'">返回主页</button>
+                    </div>
+                </div>
+            </header>
+
+            <main class="admin-main">
+            <!-- 用户管理 -->
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>👥 用户管理</h2>
+                    <button class="btn-primary" onclick="app.showAddUserModal()">+ 添加用户</button>
+                </div>
+                <div class="user-list" id="userList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </section>
+
+            <!-- 聊天记录管理 -->
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>💬 聊天记录管理</h2>
+                </div>
+                <div class="chat-sessions-list" id="chatSessionsList">
+                    <div class="loading">加载中...</div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 添加用户模态框 -->
+    <div class="modal" id="addUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加新用户</h3>
+                <button class="modal-close" onclick="app.closeAddUserModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="newUsername" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="newPassword" placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>邮箱（可选）</label>
+                    <input type="email" id="newEmail" placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label>AI 权限类型</label>
+                    <select id="newPermissionType">
+                        <option value="UNLIMITED">无限制</option>
+                        <option value="LIMITED" selected>有限期</option>
+                    </select>
+                </div>
+                <div class="form-group" id="limitDaysGroup">
+                    <label>有效天数</label>
+                    <input type="number" id="newLimitDays" value="30" min="1" max="3650">
+                </div>
+                <div class="error-msg" id="addUserError"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="app.closeAddUserModal()">取消</button>
+                <button class="btn-primary" onclick="app.addUser()">添加</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑权限模态框 -->
+    <div class="modal" id="editPermissionModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>编辑 AI 权限</h3>
+                <button class="modal-close" onclick="app.closeEditPermissionModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="editUsername" readonly>
+                </div>
+                <div class="form-group">
+                    <label>权限类型</label>
+                    <select id="editPermissionType">
+                        <option value="UNLIMITED">无限制</option>
+                        <option value="LIMITED">有限期</option>
+                    </select>
+                </div>
+                <div class="form-group" id="editLimitDaysGroup">
+                    <label>有效天数</label>
+                    <input type="number" id="editLimitDays" value="30" min="1" max="3650">
+                </div>
+                <div class="error-msg" id="editPermissionError"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="app.closeEditPermissionModal()">取消</button>
+                <button class="btn-primary" onclick="app.updatePermission()">保存</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <script src="time-utils.js"></script>
+    <script src="admin-script.js"></script>
+</body>
+</html>

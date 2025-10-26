@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToList - 待办事项管理系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-box">
+                <h1>📋 ToList</h1>
+                <p class="login-subtitle">待办事项管理系统</p>
+                
+                <form id="loginForm" class="login-form">
+                    <div class="form-group">
+                        <label for="username">用户名</label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            placeholder="输入用户名"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">密码</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            placeholder="输入密码"
+                            required
+                        >
+                    </div>
+
+                    <div id="loginError" class="error-msg"></div>
+
+                    <button type="submit" class="btn-login">登录</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 应用主页面 -->
+    <div id="appPage" class="page">
+        <!-- 移动端底部导航栏 -->
+        <nav class="mobile-nav">
+            <button class="nav-item active" data-view="todo">
+                <span class="nav-icon">📋</span>
+                <span class="nav-label">待办</span>
+            </button>
+            <button class="nav-item" data-view="chat">
+                <span class="nav-icon">🤖</span>
+                <span class="nav-label">AI助手</span>
+            </button>
+        </nav>
+
+        <!-- 移动端添加待办浮动按钮 -->
+        <button id="mobileAddBtn" class="mobile-add-btn">
+            <span class="add-icon">+</span>
+        </button>
+
+        <!-- 移动端添加待办弹窗 -->
+        <div id="mobileAddModal" class="mobile-add-modal">
+            <div class="mobile-modal-content">
+                <div class="mobile-modal-header">
+                    <h3>✨ 添加新待办</h3>
+                    <button id="closeMobileModal" class="close-modal-btn">✕</button>
+                </div>
+                <div class="mobile-modal-body">
+                    <div class="mobile-form-group">
+                        <label>📝 待办内容</label>
+                        <textarea 
+                            id="mobileTodoInput" 
+                            class="mobile-todo-input" 
+                            placeholder="描述你的待办事项..."
+                            rows="4"
+                        ></textarea>
+                    </div>
+                    <div class="mobile-form-group">
+                        <label>⏰ 截止时间</label>
+                        <input 
+                            type="datetime-local" 
+                            id="mobileTodoDateTime" 
+                            class="mobile-datetime-input"
+                        >
+                    </div>
+                    <div id="mobileErrorMsg" class="mobile-error-msg"></div>
+                    <button id="mobileConfirmAdd" class="mobile-confirm-btn">✓ 添加待办</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <!-- 左侧：待办事项区域（2/3宽度） -->
+            <div class="todo-container view-panel active" data-panel="todo">
+                <div class="header">
+                    <div class="header-left">
+                        <h1>📋 我的待办事项</h1>
+                        <p class="subtitle">记录、管理和完成你的任务</p>
+                    </div>
+                    <div class="header-right">
+                        <button id="adminBtn" class="btn-admin" style="display:none;">👑 管理</button>
+                        <span id="currentUser" class="user-info"></span>
+                        <button id="logoutBtn" class="btn-logout">退出登录</button>
+                    </div>
+                </div>
+
+                <!-- 添加待办事项表单 -->
+                <div class="add-todo-section">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="todoInput" 
+                            class="todo-input" 
+                            placeholder="输入待做事项..."
+                            autocomplete="off"
+                        >
+                        <input 
+                            type="datetime-local" 
+                            id="todoDateTime" 
+                            class="datetime-input"
+                        >
+                        <button id="addBtn" class="btn-add">+ 添加</button>
+                    </div>
+                    <div id="errorMsg" class="error-msg"></div>
+                    <div id="successMsg" class="success-msg"></div>
+                </div>
+
+                <!-- 统计信息 -->
+                <div class="stats">
+                    <div class="stat-item">
+                        <span class="stat-label">总数：</span>
+                        <span id="totalCount" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">待完成：</span>
+                        <span id="pendingCount" class="stat-value">0</span>
+                    </div>
+                </div>
+
+                <!-- 待办事项列表 -->
+                <div class="todo-list-section">
+                    <div id="todoList" class="todo-list">
+                        <div class="loading-state">
+                            <p>⏳ 正在加载...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：AI聊天窗口（1/3宽度） -->
+            <div class="ai-chat-container view-panel" data-panel="chat">
+                <div class="ai-chat-box">
+                    <div class="ai-header">
+                        <h2>🤖 AI 助手</h2>
+                        <div class="ai-status-info">
+                            <span class="ai-status" id="aiStatus">未连接</span>
+                            <div class="ai-permission-info" id="aiPermissionInfo" style="display: none;">
+                                <div class="permission-details">
+                                    <span id="permissionType" class="perm-type">权限: --</span>
+                                    <span id="permissionDays" class="perm-days">剩余: --</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Key 设置面板 - 已隐藏，API Key已硬编码 -->
+                    <div id="apiKeyPanel" class="api-key-panel" style="display: none;">
+                        <div class="api-key-content">
+                            <h3>配置 Gemini API</h3>
+                            <p class="api-key-hint">
+                                请输入您的 Gemini API Key
+                            </p>
+                            <p class="api-key-hint-small">
+                                获取 API Key: <a href="https://aistudio.google.com/app/apikey" target="_blank">https://aistudio.google.com/app/apikey</a>
+                            </p>
+                            <div class="api-key-input-group">
+                                <input 
+                                    type="password" 
+                                    id="geminiApiKey" 
+                                    class="api-key-input"
+                                    placeholder="粘贴您的 Gemini API Key..."
+                                >
+                                <button id="saveApiKeyBtn" class="btn-save-key">保存</button>
+                            </div>
+                            <div id="apiKeyError" class="api-key-error"></div>
+                        </div>
+                    </div>
+
+                    <!-- 聊天区域 - 默认显示 -->
+                    <div id="chatArea" class="chat-area">
+                        <div id="chatMessages" class="chat-messages">
+                            <div class="chat-message system">
+                                <p>👋 Hello! 我是您的 AI 助手，可以帮助您管理待办事项。</p>
+                            </div>
+                        </div>
+
+                        <div class="chat-input-area">
+                            <div class="input-group-chat">
+                                <textarea 
+                                    id="chatInput" 
+                                    class="chat-input"
+                                    placeholder="输入您的问题... (Shift+Enter换行，Enter发送)"
+                                    autocomplete="off"
+                                    rows="1"
+                                ></textarea>
+                                <button id="sendBtn" class="btn-send">发送</button>
+                            </div>
+                            <div id="chatError" class="chat-error"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 不再需要加载Gemini库，由Python后端处理 -->
+    <!-- Gemini库已由Python后端管理 -->
+    
+    <script src="time-utils.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

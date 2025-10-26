@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>时间系统测试页面</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        h2 {
+            color: #764ba2;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+            margin-top: 30px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 4px;
+        }
+        .label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            min-width: 200px;
+        }
+        .value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+        .success {
+            color: #28a745;
+        }
+        .info {
+            color: #17a2b8;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        #refreshBtn {
+            background: #28a745;
+        }
+        #refreshBtn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🕐 时间系统测试页面</h1>
+        <p>此页面用于验证网站的统一时间处理系统是否正常工作。</p>
+        
+        <div style="margin: 20px 0;">
+            <button id="refreshBtn" onclick="runTests()">🔄 重新测试</button>
+            <button onclick="simulateUTC8()">测试 UTC+8</button>
+            <button onclick="simulateUTC()">测试 UTC</button>
+            <button onclick="simulateUTCMinus5()">测试 UTC-5</button>
+        </div>
+
+        <h2>1. 时区信息</h2>
+        <div class="test-section" id="timezoneInfo"></div>
+
+        <h2>2. 时间转换测试</h2>
+        <div class="test-section" id="conversionTests"></div>
+
+        <h2>3. 格式化显示测试</h2>
+        <div class="test-section" id="formatTests"></div>
+
+        <h2>4. 相对时间测试</h2>
+        <div class="test-section" id="relativeTests"></div>
+
+        <h2>5. datetime-local 表单测试</h2>
+        <div class="test-section" id="formTests"></div>
+    </div>
+
+    <script src="time-utils.js"></script>
+    <script>
+        function runTests() {
+            testTimezoneInfo();
+            testConversion();
+            testFormatting();
+            testRelativeTime();
+            testFormHelpers();
+        }
+
+        function testTimezoneInfo() {
+            const container = document.getElementById('timezoneInfo');
+            const offset = TimeUtils.getTimezoneOffset();
+            const tzString = TimeUtils.getTimezoneString();
+            
+            container.innerHTML = `
+                <div class="test-item">
+                    <span class="label">时区偏移量（分钟）:</span>
+                    <span class="value">${offset}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">时区字符串:</span>
+                    <span class="value success">${tzString}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">系统当前时间:</span>
+                    <span class="value">${new Date().toString()}</span>
+                </div>
+            `;
+        }
+
+        function testConversion() {
+            const container = document.getElementById('conversionTests');
+            const now = new Date();
+            const utcString = TimeUtils.toUTC(now);
+            const localDate = TimeUtils.toLocal(utcString);
+            
+            container.innerHTML = `
+                <div class="test-item">
+                    <span class="label">本地时间对象:</span>
+                    <span class="value">${now.toString()}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">转换为 UTC 字符串:</span>
+                    <span class="value info">${utcString}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">再转回本地时间:</span>
+                    <span class="value">${localDate.toString()}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">往返转换是否一致:</span>
+                    <span class="value ${Math.abs(now - localDate) < 1000 ? 'success' : 'error'}">
+                        ${Math.abs(now - localDate) < 1000 ? '✅ 一致' : '❌ 不一致'}
+                    </span>
+                </div>
+            `;
+        }
+
+        function testFormatting() {
+            const container = document.getElementById('formatTests');
+            const testTime = '2025-10-25T03:24:24.000Z';  // UTC 时间
+            
+            container.innerHTML = `
+                <div class="test-item">
+                    <span class="label">测试 UTC 时间:</span>
+                    <span class="value info">${testTime}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">formatDateTime (完整):</span>
+                    <span class="value success">${TimeUtils.formatDateTime(testTime, true)}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">formatDateTime (无秒):</span>
+                    <span class="value success">${TimeUtils.formatDateTime(testTime, false)}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">formatDate (仅日期):</span>
+                    <span class="value success">${TimeUtils.formatDate(testTime)}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">formatTime (仅时间):</span>
+                    <span class="value success">${TimeUtils.formatTime(testTime)}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">formatChatTimestamp:</span>
+                    <span class="value success">${TimeUtils.formatChatTimestamp(testTime)}</span>
+                </div>
+            `;
+        }
+
+        function testRelativeTime() {
+            const container = document.getElementById('relativeTests');
+            const now = new Date();
+            
+            const tests = [
+                { desc: '刚刚 (30秒前)', time: new Date(now - 30 * 1000) },
+                { desc: '5分钟前', time: new Date(now - 5 * 60 * 1000) },
+                { desc: '2小时前', time: new Date(now - 2 * 60 * 60 * 1000) },
+                { desc: '3天前', time: new Date(now - 3 * 24 * 60 * 60 * 1000) },
+                { desc: '30天前', time: new Date(now - 30 * 24 * 60 * 60 * 1000) },
+            ];
+            
+            let html = '';
+            tests.forEach(test => {
+                const utcTime = TimeUtils.toUTC(test.time);
+                const relative = TimeUtils.formatRelative(utcTime, true);
+                html += `
+                    <div class="test-item">
+                        <span class="label">${test.desc}:</span>
+                        <span class="value success">${relative}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        function testFormHelpers() {
+            const container = document.getElementById('formTests');
+            const now = new Date();
+            const localString = TimeUtils.toDateTimeLocalString(now);
+            const utcFromLocal = TimeUtils.fromDateTimeLocalString(localString);
+            
+            container.innerHTML = `
+                <div class="test-item">
+                    <span class="label">当前本地时间:</span>
+                    <span class="value">${now.toString()}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">datetime-local 格式:</span>
+                    <span class="value info">${localString}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">转换回 UTC:</span>
+                    <span class="value success">${utcFromLocal}</span>
+                </div>
+                <div class="test-item">
+                    <span class="label">实际 Input 测试:</span>
+                    <input type="datetime-local" value="${localString}" 
+                           style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                </div>
+            `;
+        }
+
+        function simulateUTC8() {
+            alert('注意：浏览器时区由系统设置决定，无法通过 JavaScript 模拟。\n\n要测试不同时区，请修改系统时区设置后刷新页面。\n\n当前时区：' + TimeUtils.getTimezoneString());
+        }
+
+        function simulateUTC() {
+            alert('注意：浏览器时区由系统设置决定，无法通过 JavaScript 模拟。\n\n要测试不同时区，请修改系统时区设置后刷新页面。\n\n当前时区：' + TimeUtils.getTimezoneString());
+        }
+
+        function simulateUTCMinus5() {
+            alert('注意：浏览器时区由系统设置决定，无法通过 JavaScript 模拟。\n\n要测试不同时区，请修改系统时区设置后刷新页面。\n\n当前时区：' + TimeUtils.getTimezoneString());
+        }
+
+        // 页面加载时自动运行测试
+        window.addEventListener('DOMContentLoaded', runTests);
+        
+        // 每秒更新一次相对时间测试
+        setInterval(testRelativeTime, 1000);
+    </script>
+</body>
+</html>
