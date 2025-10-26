@@ -24,6 +24,8 @@ if not API_KEY:
     raise ValueError("❌ 未设置 GEMINI_API_KEY 环境变量")
 
 genai.configure(api_key=API_KEY)
+
+# 使用 Gemini 2.5 Flash - 稳定版本
 MODEL_NAME = "gemini-2.5-flash"
 
 # 全局聊天会话存储（生产环境应使用数据库）
