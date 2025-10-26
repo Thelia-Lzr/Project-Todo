@@ -603,35 +603,80 @@ class AdminApp {
                     statusClass = 'warning';
                 }
 
+                let html = `
+                    <div class="quota-item">
+                        <span class="quota-label">API 状态</span>
+                        <span class="quota-value ${statusClass}">${data.info?.status || '未知'}</span>
+                    </div>
+                `;
+
+                if (data.modelName) {
+                    html += `
+                    <div class="quota-item">
+                        <span class="quota-label">模型</span>
+                        <span class="quota-value">${data.displayName || data.modelName}</span>
+                    </div>
+                    `;
+                }
+
+                html += `
+                    <div class="quota-item">
+                        <span class="quota-label">计划类型</span>
+                        <span class="quota-value">${data.info?.type || 'N/A'}</span>
+                    </div>
+                `;
+
+                if (data.info?.limits) {
+                    const limits = data.info.limits;
+                    html += `
+                    <div class="quota-section">
+                        <div class="quota-section-title">📊 使用限制</div>
+                        <div class="quota-limits">
+                            <div class="quota-limit-item">
+                                <span class="limit-label">每分钟请求数</span>
+                                <span class="limit-value">${limits.rpm}</span>
+                            </div>
+                            <div class="quota-limit-item">
+                                <span class="limit-label">每分钟 Token 数</span>
+                                <span class="limit-value">${limits.tpm}</span>
+                            </div>
+                            <div class="quota-limit-item">
+                                <span class="limit-label">每天请求数</span>
+                                <span class="limit-value">${limits.rpd}</span>
+                            </div>
+                        </div>
+                        <div class="quota-note">${limits.note}</div>
+                    </div>
+                    `;
+                }
+
+                if (data.info?.features) {
+                    html += `
+                    <div class="quota-section">
+                        <div class="quota-section-title">✨ 支持功能</div>
+                        <div class="quota-features">
+                            ${data.info.features.map(f => `<div class="feature-item">${f}</div>`).join('')}
+                        </div>
+                    </div>
+                    `;
+                }
+
+                quotaDisplay.innerHTML = html;
+            } else {
+                let statusClass = 'danger';
                 quotaDisplay.innerHTML = `
                     <div class="quota-item">
                         <span class="quota-label">状态</span>
-                        <span class="quota-value ${statusClass}">${data.info?.status || '未知'}</span>
+                        <span class="quota-value ${statusClass}">${data.info?.status || '错误'}</span>
                     </div>
                     <div class="quota-item">
                         <span class="quota-label">类型</span>
                         <span class="quota-value">${data.info?.type || 'N/A'}</span>
                     </div>
-                    ${data.modelsAvailable ? `
-                    <div class="quota-item">
-                        <span class="quota-label">可用模型</span>
-                        <span class="quota-value">${data.modelsAvailable} 个</span>
+                    <div class="error-note" style="margin-top: 10px; color: var(--danger-color);">
+                        ${data.message}
                     </div>
-                    ` : ''}
-                    <div class="quota-item">
-                        <span class="quota-label">限制说明</span>
-                        <span class="quota-value" style="font-size: 0.9rem;">${data.info?.note || 'N/A'}</span>
-                    </div>
-                `;
-            } else {
-                quotaDisplay.innerHTML = `
-                    <div class="quota-item">
-                        <span class="quota-label">状态</span>
-                        <span class="quota-value danger">错误</span>
-                    </div>
-                    <div class="quota-item" style="grid-column: 1 / -1;">
-                        <span class="quota-value" style="color: var(--danger-color);">${data.message}</span>
-                    </div>
+                    ${data.info?.note ? `<div class="quota-note">${data.info.note}</div>` : ''}
                 `;
             }
         } catch (error) {
@@ -640,6 +685,9 @@ class AdminApp {
                 <div class="quota-item">
                     <span class="quota-label">状态</span>
                     <span class="quota-value danger">检查失败</span>
+                </div>
+                <div class="error-note" style="margin-top: 10px; color: var(--danger-color);">
+                    无法连接到服务器，请检查网络连接
                 </div>
             `;
         }

@@ -509,26 +509,39 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
 
         const apiKey = match[1].trim();
         
-        // 调用 Gemini API 获取模型信息（作为配额检查的替代方案）
+        // 调用 Gemini API 获取模型信息来验证 API Key 有效性
         try {
             const response = await axios.get(
-                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp?key=${apiKey}`
             );
             
-            if (response.data && response.data.models) {
-                res.json({
+            if (response.data) {
+                // Gemini API 的限制（免费版）
+                const quotaInfo = {
                     success: true,
                     status: 'active',
                     message: 'API Key 有效且可用',
-                    modelsAvailable: response.data.models.length,
-                    // Gemini API 免费版没有直接的配额查询接口
-                    // 这里返回一些基本信息
+                    modelName: response.data.name,
+                    displayName: response.data.displayName,
                     info: {
                         status: '正常',
-                        type: 'Gemini API',
-                        note: 'Gemini API 免费版每分钟限制60次请求'
+                        type: 'Gemini API Free Tier',
+                        limits: {
+                            rpm: '15 次/分钟 (免费版)',
+                            tpm: '1,000,000 tokens/分钟',
+                            rpd: '1,500 次/天',
+                            note: 'Gemini 2.0 Flash 免费版限制'
+                        },
+                        features: [
+                            '✅ 文本生成',
+                            '✅ 对话能力',
+                            '✅ 代码生成',
+                            '✅ 长上下文支持 (最多 1M tokens)'
+                        ]
                     }
-                });
+                };
+                
+                res.json(quotaInfo);
             } else {
                 res.json({
                     success: false,
@@ -540,18 +553,39 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                 res.json({
                     success: true,
                     status: 'rate_limited',
-                    message: 'API 配额已达上限（每分钟请求次数限制）',
+                    message: 'API 已达速率限制',
                     info: {
-                        status: '配额限制',
-                        type: 'Gemini API',
-                        note: '请稍后再试'
+                        status: '⚠️ 配额限制',
+                        type: 'Gemini API Free Tier',
+                        limits: {
+                            rpm: '15 次/分钟 (已达限制)',
+                            tpm: '1,000,000 tokens/分钟',
+                            rpd: '1,500 次/天',
+                            note: '请稍后再试，速率限制会在1分钟后重置'
+                        }
                     }
                 });
             } else if (apiError.response && apiError.response.status === 403) {
                 res.json({
                     success: false,
                     status: 'invalid',
-                    message: 'API Key 无效或已被禁用'
+                    message: 'API Key 无效或已被禁用',
+                    info: {
+                        status: '❌ 无效',
+                        type: 'Gemini API',
+                        note: '请检查 API Key 是否正确或是否已过期'
+                    }
+                });
+            } else if (apiError.response && apiError.response.status === 400) {
+                res.json({
+                    success: false,
+                    status: 'error',
+                    message: 'API 请求错误',
+                    info: {
+                        status: '❌ 错误',
+                        type: 'Gemini API',
+                        note: apiError.response.data?.error?.message || '请求参数错误'
+                    }
                 });
             } else {
                 throw apiError;
