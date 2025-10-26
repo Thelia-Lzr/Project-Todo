@@ -398,4 +398,172 @@ router.delete('/chat-history/:username', authMiddleware, verifyAdmin, async (req
     }
 });
 
+// 获取当前API Key（隐藏部分字符）
+router.get('/api-key', authMiddleware, verifyAdmin, async (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(__dirname, '../backend/.env');
+        
+        if (!fs.existsSync(envPath)) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 配置文件不存在' 
+            });
+        }
+
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        const match = envContent.match(/GEMINI_API_KEY=(.+)/);
+        
+        if (!match) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 未配置' 
+            });
+        }
+
+        const apiKey = match[1].trim();
+        // 只显示前8位和后4位
+        const maskedKey = apiKey.substring(0, 8) + '...' + apiKey.substring(apiKey.length - 4);
+        
+        res.json({ 
+            success: true, 
+            apiKey: maskedKey,
+            fullKey: apiKey // 用于前端显示/隐藏
+        });
+    } catch (error) {
+        console.error('获取API Key失败:', error);
+        res.status(500).json({ success: false, message: '获取API Key失败' });
+    }
+});
+
+// 更新API Key
+router.post('/api-key', authMiddleware, verifyAdmin, async (req, res) => {
+    try {
+        const { apiKey } = req.body;
+        
+        if (!apiKey || apiKey.trim().length === 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'API Key 不能为空' 
+            });
+        }
+
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(__dirname, '../backend/.env');
+        
+        // 读取现有配置
+        let envContent = '';
+        if (fs.existsSync(envPath)) {
+            envContent = fs.readFileSync(envPath, 'utf-8');
+        }
+
+        // 更新或添加 GEMINI_API_KEY
+        if (envContent.includes('GEMINI_API_KEY=')) {
+            envContent = envContent.replace(/GEMINI_API_KEY=.+/, `GEMINI_API_KEY=${apiKey}`);
+        } else {
+            envContent += `\nGEMINI_API_KEY=${apiKey}\n`;
+        }
+
+        // 写入文件
+        fs.writeFileSync(envPath, envContent, 'utf-8');
+        
+        // 更新当前进程的环境变量
+        process.env.GEMINI_API_KEY = apiKey;
+        
+        res.json({ 
+            success: true, 
+            message: 'API Key 已更新，请重启后端服务以生效' 
+        });
+    } catch (error) {
+        console.error('更新API Key失败:', error);
+        res.status(500).json({ success: false, message: '更新API Key失败' });
+    }
+});
+
+// 检查API配额
+router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
+    try {
+        const axios = require('axios');
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(__dirname, '../backend/.env');
+        
+        if (!fs.existsSync(envPath)) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 配置文件不存在' 
+            });
+        }
+
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        const match = envContent.match(/GEMINI_API_KEY=(.+)/);
+        
+        if (!match) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 未配置' 
+            });
+        }
+
+        const apiKey = match[1].trim();
+        
+        // 调用 Gemini API 获取模型信息（作为配额检查的替代方案）
+        try {
+            const response = await axios.get(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+            );
+            
+            if (response.data && response.data.models) {
+                res.json({
+                    success: true,
+                    status: 'active',
+                    message: 'API Key 有效且可用',
+                    modelsAvailable: response.data.models.length,
+                    // Gemini API 免费版没有直接的配额查询接口
+                    // 这里返回一些基本信息
+                    info: {
+                        status: '正常',
+                        type: 'Gemini API',
+                        note: 'Gemini API 免费版每分钟限制60次请求'
+                    }
+                });
+            } else {
+                res.json({
+                    success: false,
+                    message: 'API Key 有效但无法获取详细信息'
+                });
+            }
+        } catch (apiError) {
+            if (apiError.response && apiError.response.status === 429) {
+                res.json({
+                    success: true,
+                    status: 'rate_limited',
+                    message: 'API 配额已达上限（每分钟请求次数限制）',
+                    info: {
+                        status: '配额限制',
+                        type: 'Gemini API',
+                        note: '请稍后再试'
+                    }
+                });
+            } else if (apiError.response && apiError.response.status === 403) {
+                res.json({
+                    success: false,
+                    status: 'invalid',
+                    message: 'API Key 无效或已被禁用'
+                });
+            } else {
+                throw apiError;
+            }
+        }
+    } catch (error) {
+        console.error('检查API配额失败:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: '检查API配额失败: ' + error.message 
+        });
+    }
+});
+
 module.exports = router;

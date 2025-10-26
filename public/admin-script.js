@@ -78,6 +78,12 @@ class AdminApp {
         document.getElementById('adminVerifyPage').classList.remove('active');
         document.getElementById('adminPanelPage').classList.add('active');
         document.getElementById('adminUser').textContent = `👑 Thelia`;
+        
+        // 加载数据
+        this.loadApiKey();
+        this.checkQuota();
+        this.loadUsers();
+        this.loadChatSessions();
     }
 
     getUsername() {
@@ -477,6 +483,166 @@ class AdminApp {
     showError(message) {
         console.error(message);
         alert('❌ ' + message);
+    }
+
+    // ========== API Key 管理 ==========
+
+    async loadApiKey() {
+        try {
+            const response = await fetch(`${this.apiBaseURL}/admin/api-key`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                const apiKeyInput = document.getElementById('currentApiKey');
+                apiKeyInput.value = data.apiKey;
+                apiKeyInput.dataset.fullKey = data.fullKey; // 保存完整key用于显示
+            } else {
+                console.error('加载API Key失败:', data.message);
+            }
+        } catch (error) {
+            console.error('加载API Key失败:', error);
+        }
+    }
+
+    toggleApiKeyVisibility() {
+        const apiKeyInput = document.getElementById('currentApiKey');
+        if (apiKeyInput.type === 'password') {
+            apiKeyInput.type = 'text';
+            apiKeyInput.value = apiKeyInput.dataset.fullKey || apiKeyInput.value;
+        } else {
+            apiKeyInput.type = 'password';
+            const fullKey = apiKeyInput.value;
+            apiKeyInput.value = fullKey.substring(0, 8) + '...' + fullKey.substring(fullKey.length - 4);
+        }
+    }
+
+    showChangeApiKeyModal() {
+        document.getElementById('changeApiKeyModal').classList.add('active');
+        document.getElementById('newApiKey').value = '';
+        document.getElementById('confirmApiKey').value = '';
+        document.getElementById('changeApiKeyError').classList.remove('show');
+    }
+
+    closeChangeApiKeyModal() {
+        document.getElementById('changeApiKeyModal').classList.remove('active');
+    }
+
+    async changeApiKey() {
+        const newApiKey = document.getElementById('newApiKey').value.trim();
+        const confirmApiKey = document.getElementById('confirmApiKey').value.trim();
+        const errorMsg = document.getElementById('changeApiKeyError');
+        
+        errorMsg.classList.remove('show');
+
+        if (!newApiKey) {
+            errorMsg.textContent = '请输入新的 API Key';
+            errorMsg.classList.add('show');
+            return;
+        }
+
+        if (newApiKey !== confirmApiKey) {
+            errorMsg.textContent = '两次输入的 API Key 不一致';
+            errorMsg.classList.add('show');
+            return;
+        }
+
+        if (!newApiKey.startsWith('AIza')) {
+            errorMsg.textContent = 'API Key 格式不正确（应以 AIza 开头）';
+            errorMsg.classList.add('show');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${this.apiBaseURL}/admin/api-key`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.token}`
+                },
+                body: JSON.stringify({ apiKey: newApiKey })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('✅ ' + data.message);
+                this.closeChangeApiKeyModal();
+                await this.loadApiKey();
+            } else {
+                errorMsg.textContent = data.message || '更新失败';
+                errorMsg.classList.add('show');
+            }
+        } catch (error) {
+            console.error('更新API Key失败:', error);
+            errorMsg.textContent = '更新失败，请重试';
+            errorMsg.classList.add('show');
+        }
+    }
+
+    async checkQuota() {
+        const quotaDisplay = document.getElementById('quotaDisplay');
+        quotaDisplay.innerHTML = '<div class="loading">检查中...</div>';
+
+        try {
+            const response = await fetch(`${this.apiBaseURL}/admin/api-quota`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                let statusClass = 'success';
+                if (data.status === 'rate_limited') {
+                    statusClass = 'warning';
+                }
+
+                quotaDisplay.innerHTML = `
+                    <div class="quota-item">
+                        <span class="quota-label">状态</span>
+                        <span class="quota-value ${statusClass}">${data.info?.status || '未知'}</span>
+                    </div>
+                    <div class="quota-item">
+                        <span class="quota-label">类型</span>
+                        <span class="quota-value">${data.info?.type || 'N/A'}</span>
+                    </div>
+                    ${data.modelsAvailable ? `
+                    <div class="quota-item">
+                        <span class="quota-label">可用模型</span>
+                        <span class="quota-value">${data.modelsAvailable} 个</span>
+                    </div>
+                    ` : ''}
+                    <div class="quota-item">
+                        <span class="quota-label">限制说明</span>
+                        <span class="quota-value" style="font-size: 0.9rem;">${data.info?.note || 'N/A'}</span>
+                    </div>
+                `;
+            } else {
+                quotaDisplay.innerHTML = `
+                    <div class="quota-item">
+                        <span class="quota-label">状态</span>
+                        <span class="quota-value danger">错误</span>
+                    </div>
+                    <div class="quota-item" style="grid-column: 1 / -1;">
+                        <span class="quota-value" style="color: var(--danger-color);">${data.message}</span>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('检查配额失败:', error);
+            quotaDisplay.innerHTML = `
+                <div class="quota-item">
+                    <span class="quota-label">状态</span>
+                    <span class="quota-value danger">检查失败</span>
+                </div>
+            `;
+        }
     }
 }
 

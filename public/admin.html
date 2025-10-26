@@ -50,6 +50,35 @@
             </header>
 
             <main class="admin-main">
+            <!-- API Key 管理 -->
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>🔑 API Key 管理</h2>
+                </div>
+                <div class="api-key-management">
+                    <div class="api-key-card">
+                        <div class="api-key-info">
+                            <h3>当前 API Key</h3>
+                            <div class="api-key-display">
+                                <input type="password" id="currentApiKey" readonly>
+                                <button class="btn-icon" onclick="app.toggleApiKeyVisibility()" title="显示/隐藏">
+                                    👁️
+                                </button>
+                            </div>
+                            <button class="btn-secondary" onclick="app.showChangeApiKeyModal()">修改 API Key</button>
+                        </div>
+                        
+                        <div class="api-quota-info">
+                            <h3>使用配额</h3>
+                            <div id="quotaDisplay" class="quota-display">
+                                <div class="loading">加载中...</div>
+                            </div>
+                            <button class="btn-secondary" onclick="app.checkQuota()">🔄 刷新配额</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 用户管理 -->
             <section class="admin-section">
                 <div class="section-header">
@@ -142,6 +171,34 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="app.closeEditPermissionModal()">取消</button>
                 <button class="btn-primary" onclick="app.updatePermission()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改 API Key 模态框 -->
+    <div class="modal" id="changeApiKeyModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>修改 API Key</h3>
+                <button class="modal-close" onclick="app.closeChangeApiKeyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>新的 API Key</label>
+                    <input type="text" id="newApiKey" placeholder="请输入新的 Gemini API Key">
+                </div>
+                <div class="form-group">
+                    <label>确认 API Key</label>
+                    <input type="text" id="confirmApiKey" placeholder="再次输入 API Key">
+                </div>
+                <div class="info-msg">
+                    ℹ️ API Key 将保存在服务器端的 .env 文件中
+                </div>
+                <div class="error-msg" id="changeApiKeyError"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="app.closeChangeApiKeyModal()">取消</button>
+                <button class="btn-primary" onclick="app.changeApiKey()">保存</button>
             </div>
         </div>
     </div>

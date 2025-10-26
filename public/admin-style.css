@@ -974,3 +974,124 @@ body {
         padding-top: max(15px, env(safe-area-inset-top));
     }
 }
+
+/* API Key 管理样式 */
+.api-key-management {
+    width: 100%;
+}
+
+.api-key-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.api-key-info,
+.api-quota-info {
+    background: var(--light-bg);
+    padding: 25px;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.api-key-info h3,
+.api-quota-info h3 {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin-bottom: 15px;
+    font-weight: 600;
+}
+
+.api-key-display {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.api-key-display input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    background: white;
+}
+
+.btn-icon {
+    width: 45px;
+    height: 45px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon:hover {
+    background: var(--light-bg);
+    transform: scale(1.05);
+}
+
+.quota-display {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+
+.quota-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.quota-item:last-child {
+    border-bottom: none;
+}
+
+.quota-label {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.quota-value {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
+.quota-value.warning {
+    color: var(--warning-color);
+}
+
+.quota-value.danger {
+    color: var(--danger-color);
+}
+
+.quota-value.success {
+    color: var(--success-color);
+}
+
+.info-msg {
+    background: #e0f2fe;
+    border-left: 4px solid #0ea5e9;
+    padding: 12px 15px;
+    border-radius: 4px;
+    margin: 15px 0;
+    color: #075985;
+    font-size: 14px;
+}
+
+@media (max-width: 768px) {
+    .api-key-card {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
