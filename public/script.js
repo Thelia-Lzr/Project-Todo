@@ -7,8 +7,8 @@ class TodoApp {
         this.pythonBaseURL = '/api';  // Python后端（通过代理）
         this.token = this.getToken();
         this.todos = [];
-        // API Key 从 localStorage 获取或用户输入
-        this.geminiApiKey = localStorage.getItem('gemini_api_key') || '';
+        // API Key 将从后端自动获取
+        this.geminiApiKey = '';
         this.chatModel = null;
         this.chatSession = null;
         this.sessionId = 'user_' + Date.now();  // 为每个会话创建唯一ID
@@ -305,13 +305,32 @@ class TodoApp {
     }
 
     async initAIChat() {
-        // ✅ API Key 已硬编码，直接初始化
+        // 自动从后端获取API Key
         if (!this.geminiApiKey) {
-            console.error('❌ API Key 未配置');
-            this.apiKeyPanel.style.display = 'flex';
-            this.chatArea.style.display = 'none';
-            this.updateAIStatus('未连接', false);
-            return false;
+            try {
+                console.log('🔑 正在从服务器获取 API Key...');
+                const response = await fetch(`${this.apiBaseURL}/chat/api-key`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (data.success && data.apiKey) {
+                    this.geminiApiKey = data.apiKey;
+                    console.log('✅ API Key 获取成功');
+                } else {
+                    throw new Error(data.message || 'API Key 获取失败');
+                }
+            } catch (error) {
+                console.error('❌ 获取 API Key 失败:', error);
+                this.apiKeyPanel.style.display = 'none';
+                this.chatArea.style.display = 'flex';
+                this.updateAIStatus('未配置', false);
+                this.showSystemMessage(`⚠️ API Key 未配置\n\n${error.message}\n\n请联系管理员配置 Gemini API Key。`);
+                return false;
+            }
         }
 
         try {

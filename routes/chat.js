@@ -324,4 +324,43 @@ router.delete('/session/:sessionId', verifyToken, async (req, res) => {
     }
 });
 
+// 获取API Key（从服务器端配置读取）
+router.get('/api-key', verifyToken, async (req, res) => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const envPath = path.join(__dirname, '../backend/.env');
+        
+        if (!fs.existsSync(envPath)) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 配置文件不存在，请联系管理员配置' 
+            });
+        }
+
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        const match = envContent.match(/GEMINI_API_KEY=(.+)/);
+        
+        if (!match) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'API Key 未配置，请联系管理员' 
+            });
+        }
+
+        const apiKey = match[1].trim();
+        
+        res.json({ 
+            success: true, 
+            apiKey: apiKey
+        });
+    } catch (error) {
+        console.error('获取API Key失败:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: '获取API Key失败' 
+        });
+    }
+});
+
 module.exports = router;
