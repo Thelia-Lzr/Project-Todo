@@ -79,9 +79,13 @@
 
 ### 1. 克隆项目
 ```bash
-git clone https://github.com/yourusername/Project-Todo.git
+git clone https://github.com/Thelia-Lzr/Project-Todo.git
 cd Project-Todo
 ```
+
+## 📫 作者与仓库
+
+本项目由 GitHub 用户 `Thelia-Lzr` 维护。仓库地址：https://github.com/Thelia-Lzr/Project-Todo
 
 ### 2. 配置环境变量
 
