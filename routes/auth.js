@@ -142,33 +142,50 @@ router.post('/register', async (req, res) => {
 
                     const userId = this.lastID;
 
-                    // 为新用户创建默认权限（LIMITED 30天）
-                    const expiresAt = new Date();
-                    expiresAt.setDate(expiresAt.getDate() + 30);
-
-                    db.run(
-                        'INSERT INTO ai_permissions (user_id, permission_type, limit_days, expires_at) VALUES (?, ?, ?, ?)',
-                        [userId, 'LIMITED', 30, expiresAt.toISOString()],
-                        (err) => {
-                            db.close();
-                            if (err) {
-                                console.error('❌ 创建权限记录失败:', err);
-                            }
-
-                            // 生成令牌
-                            const token = generateToken(userId, username);
-                            res.status(201).json({
-                                success: true,
-                                message: '注册成功',
-                                token,
-                                user: {
-                                    id: userId,
-                                    username,
-                                    email: email || null
-                                }
-                            });
+                    // 检查是否是第一个用户（管理员）
+                    db.get('SELECT COUNT(*) as count FROM users', [], (err, result) => {
+                        if (err) {
+                            console.error('❌ 检查用户数量失败:', err);
                         }
-                    );
+
+                        const isFirstUser = result && result.count === 1;
+                        
+                        // 第一个用户（管理员）获得无限制权限，其他用户获得30天限时权限
+                        const permissionType = isFirstUser ? 'UNLIMITED' : 'LIMITED';
+                        const limitDays = isFirstUser ? null : 30;
+                        const expiresAt = isFirstUser ? null : (() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + 30);
+                            return date.toISOString();
+                        })();
+
+                        db.run(
+                            'INSERT INTO ai_permissions (user_id, permission_type, limit_days, expires_at) VALUES (?, ?, ?, ?)',
+                            [userId, permissionType, limitDays, expiresAt],
+                            (err) => {
+                                db.close();
+                                if (err) {
+                                    console.error('❌ 创建权限记录失败:', err);
+                                } else if (isFirstUser) {
+                                    console.log('✅ 第一个用户已注册为管理员，授予无限制AI权限');
+                                }
+
+                                // 生成令牌
+                                const token = generateToken(userId, username);
+                                res.status(201).json({
+                                    success: true,
+                                    message: isFirstUser ? '注册成功！您是第一个用户，已获得管理员权限和无限制AI使用权限' : '注册成功',
+                                    token,
+                                    user: {
+                                        id: userId,
+                                        username,
+                                        email: email || null,
+                                        isAdmin: isFirstUser
+                                    }
+                                });
+                            }
+                        );
+                    });
                 }
             );
         } catch (error) {

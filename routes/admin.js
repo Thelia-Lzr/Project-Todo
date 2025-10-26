@@ -13,7 +13,7 @@ const verifyAdmin = async (req, res, next) => {
         console.log('verifyAdmin - userId:', userId);
         
         const user = await new Promise((resolve, reject) => {
-            db.get('SELECT username FROM users WHERE id = ?', [userId], (err, row) => {
+            db.get('SELECT id, username FROM users WHERE id = ?', [userId], (err, row) => {
                 if (err) reject(err);
                 else resolve(row);
             });
@@ -21,12 +21,13 @@ const verifyAdmin = async (req, res, next) => {
 
         console.log('verifyAdmin - user:', user);
 
-        if (!user || user.username !== 'Thelia') {
-            console.log('verifyAdmin - 不是Thelia用户');
+        // 第一个注册的用户（id = 1）自动成为管理员
+        if (!user || user.id !== 1) {
+            console.log('verifyAdmin - 不是管理员用户（需要 id = 1）');
             db.close();
             return res.status(403).json({ 
                 success: false, 
-                message: '需要管理员权限' 
+                message: '需要管理员权限（仅第一个注册的用户为管理员）' 
             });
         }
 
