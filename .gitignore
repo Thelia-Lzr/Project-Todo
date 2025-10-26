@@ -49,4 +49,6 @@ logs/
 # Temporary files
 *.tmp
 *.bak
+*.backup
+*.backup.*
 .cache/
