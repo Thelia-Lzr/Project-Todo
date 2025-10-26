@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const todosRoutes = require('./routes/todos');
 const chatRoutes = require('./routes/chat');
 const permissionsRoutes = require('./routes/permissions');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -44,6 +45,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/todos', todosRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/permissions', permissionsRoutes);
+app.use('/api/admin', adminRoutes);
 
 
 // 健康检查
