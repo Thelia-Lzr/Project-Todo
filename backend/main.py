@@ -135,6 +135,7 @@ def gemini_chat():
         
         # 获取当前时间与时区信息（容错处理，优先用前端传来的 timezone）
         client_tz = data.get('timezone') if isinstance(data, dict) else None
+        import pytz
         try:
             server_dt = current_time.astimezone()
             server_time_str = server_dt.strftime('%Y年%m月%d日 %H:%M:%S')
@@ -145,13 +146,26 @@ def gemini_chat():
             server_tz_name = 'UTC'
 
         if client_tz:
-            time_info = (
-                f"服务器当前时间: {server_time_str} ({server_tz_name})\n"
-                f"用户时区: {client_tz}\n"
-                "请以用户时区（上面所列）为准进行所有时间判断、优先级评估和建议。"
-                "如果用户时区不可用或格式不正确，请回退到服务器本地时间。"
-            )
-            tz_note = f"（主要使用用户时区: {client_tz}；如不可用则使用服务器时区 {server_tz_name}）"
+            try:
+                user_tz = pytz.timezone(client_tz)
+                user_dt = server_dt.astimezone(user_tz)
+                user_time_str = user_dt.strftime('%Y年%m月%d日 %H:%M:%S')
+                user_tz_name = user_dt.tzname() or client_tz
+                time_info = (
+                    f"服务器当前时间: {server_time_str} ({server_tz_name})\n"
+                    f"用户时区: {client_tz}\n"
+                    f"用户本地时间: {user_time_str} ({user_tz_name})\n"
+                    "请以用户时区（上面所列）为准进行所有时间判断、优先级评估和建议。"
+                    "如果用户时区不可用或格式不正确，请回退到服务器本地时间。"
+                )
+                tz_note = f"（主要使用用户时区: {client_tz}；如不可用则使用服务器时区 {server_tz_name}）"
+            except Exception:
+                time_info = (
+                    f"服务器当前时间: {server_time_str} ({server_tz_name})\n"
+                    f"用户时区: {client_tz} (解析失败，已回退)\n"
+                    "请以服务器本地时间为准进行所有时间判断。"
+                )
+                tz_note = f"（用户时区解析失败，使用服务器时区: {server_tz_name}）"
         else:
             time_info = f"当前服务器时间: {server_time_str} ({server_tz_name})\n请以服务器本地时间为准进行所有时间判断，除非用户明确说明其他时区。"
             tz_note = f"（使用服务器时区: {server_tz_name}）"
