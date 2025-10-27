@@ -1,6 +1,9 @@
 # Project Todo
 
 一个现代化的全栈待办事项管理应用，集成了 AI 智能助手功能。使用 Node.js + SQLite 构建后端，支持用户认证、待办事项 CRUD 操作，并通过 Google Gemini AI 提供智能任务管理建议。
+演示账号：test0
+演示账号密码：123456
+（可以用这个登上演示站尝试一下功能~）
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D14.0.0-brightgreen.svg)
