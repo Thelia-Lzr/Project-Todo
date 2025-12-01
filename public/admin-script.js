@@ -122,6 +122,55 @@ class AdminApp {
                 limitGroup.style.display = editPermType.value === 'LIMITED' ? 'block' : 'none';
             });
         }
+
+        // ========== AI 服务类型切换与API Key管理 ========== //
+        const aiServiceTypeSelect = document.getElementById('aiServiceType');
+        const geminiApiKeyGroup = document.getElementById('geminiApiKeyGroup');
+        const deepseekApiKeyGroup = document.getElementById('deepseekApiKeyGroup');
+        const adminGeminiApiKeyInput = document.getElementById('adminGeminiApiKey');
+        const adminDeepseekApiKeyInput = document.getElementById('adminDeepseekApiKey');
+        const saveAiServiceBtn = document.getElementById('saveAiServiceBtn');
+
+        // 初始化时根据本地存储或默认显示
+        function updateApiKeyInputVisibility() {
+            const type = aiServiceTypeSelect.value;
+            if (type === 'gemini') {
+                geminiApiKeyGroup.style.display = '';
+                deepseekApiKeyGroup.style.display = 'none';
+            } else {
+                geminiApiKeyGroup.style.display = 'none';
+                deepseekApiKeyGroup.style.display = '';
+            }
+        }
+        aiServiceTypeSelect.addEventListener('change', updateApiKeyInputVisibility);
+
+        // 保存API Key到本地存储（可改为后端存储）
+        saveAiServiceBtn.addEventListener('click', function () {
+            const type = aiServiceTypeSelect.value;
+            // 保存管理员选择的默认AI服务
+            localStorage.setItem('preferredAiService', type);
+
+            if (type === 'gemini') {
+                const key = adminGeminiApiKeyInput.value.trim();
+                localStorage.setItem('adminGeminiApiKey', key);
+                alert('Gemini API Key 已保存，并设置为默认服务');
+            } else {
+                const key = adminDeepseekApiKeyInput.value.trim();
+                localStorage.setItem('adminDeepseekApiKey', key);
+                alert('DeepSeek API Key 已保存，并设置为默认服务');
+            }
+        });
+
+        // 页面加载时恢复API Key
+        window.addEventListener('DOMContentLoaded', function () {
+            const geminiKey = localStorage.getItem('adminGeminiApiKey') || '';
+            const deepseekKey = localStorage.getItem('adminDeepseekApiKey') || '';
+            const preferred = localStorage.getItem('preferredAiService') || 'gemini';
+            adminGeminiApiKeyInput.value = geminiKey;
+            adminDeepseekApiKeyInput.value = deepseekKey;
+            aiServiceTypeSelect.value = preferred;
+            updateApiKeyInputVisibility();
+        });
     }
 
     getToken() {

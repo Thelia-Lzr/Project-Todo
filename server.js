@@ -40,6 +40,22 @@ app.use('/api/gemini', httpProxy(PYTHON_BACKEND, {
     }
 }));
 
+// Python后端代理 - 将/api/deepseek请求转发到Python后端
+app.use('/api/deepseek', httpProxy(PYTHON_BACKEND, {
+    proxyReqPathResolver: (req) => {
+        const fullPath = '/api/deepseek' + req.url;
+        console.log(`🔄 代理请求 (deepseek): ${req.url} → ${fullPath}`);
+        return fullPath;
+    },
+    proxyErrorHandler: (err, res, next) => {
+        console.error('❌ 代理错误 (deepseek):', err.message);
+        res.status(503).json({
+            success: false,
+            error: 'Python后端连接失败，请确保 Python 后端在运行 (http://localhost:5000)'
+        });
+    }
+}));
+
 // API 路由
 app.use('/api/auth', authRoutes);
 app.use('/api/todos', todosRoutes);
