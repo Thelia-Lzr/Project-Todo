@@ -13,25 +13,17 @@ async function initDatabase() {
                 return;
             }
 
-            // 创建用户表
-            db.run(`
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    password TEXT NOT NULL,
-                    email TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    last_login DATETIME
-                )
-            `, (err) => {
-                if (err && !err.message.includes('already exists')) {
-                    reject(err);
-                    return;
-                }
-
-                // 创建待办事项表
-                db.run(`
-                    CREATE TABLE IF NOT EXISTS todos (
+            db.serialize(() => {
+                const statements = [
+                    `CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT UNIQUE NOT NULL,
+                        password TEXT NOT NULL,
+                        email TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        last_login DATETIME
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS todos (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL,
                         text TEXT NOT NULL,
@@ -40,131 +32,82 @@ async function initDatabase() {
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                    )
-                `, (err) => {
-                    if (err && !err.message.includes('already exists')) {
-                        reject(err);
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS ai_permissions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL UNIQUE,
+                        permission_type TEXT DEFAULT 'LIMITED',
+                        limit_days INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        expires_at DATETIME,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS chat_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        session_id TEXT UNIQUE NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS chat_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        session_id TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+                        FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS api_usage (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        request_tokens INTEGER DEFAULT 0,
+                        response_tokens INTEGER DEFAULT 0,
+                        total_tokens INTEGER DEFAULT 0,
+                        model_name TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )`,
+                    `CREATE TABLE IF NOT EXISTS admin_settings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        key TEXT UNIQUE NOT NULL,
+                        value TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )`,
+                    `CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)`,
+                    `CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id)`,
+                    `CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)`,
+                    `CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id)`,
+                    `CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at)`
+                ];
+
+                let i = 0;
+                function runNext() {
+                    if (i >= statements.length) {
+                        // 所有语句执行完毕，创建初始用户
+                        createInitialUser(db).then(() => {
+                            db.close();
+                            resolve();
+                        }).catch((error) => {
+                            db.close();
+                            reject(error);
+                        });
                         return;
                     }
-
-                    // 创建AI权限表
-                    db.run(`
-                        CREATE TABLE IF NOT EXISTS ai_permissions (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            user_id INTEGER NOT NULL UNIQUE,
-                            permission_type TEXT DEFAULT 'LIMITED',
-                            limit_days INTEGER,
-                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                            expires_at DATETIME,
-                            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                        )
-                    `, (err) => {
+                    db.run(statements[i], (err) => {
                         if (err && !err.message.includes('already exists')) {
+                            db.close();
                             reject(err);
                             return;
                         }
-
-                        // 创建聊天会话表
-                        db.run(`
-                            CREATE TABLE IF NOT EXISTS chat_sessions (
-                                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                user_id INTEGER NOT NULL,
-                                session_id TEXT UNIQUE NOT NULL,
-                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                            )
-                        `, (err) => {
-                            if (err && !err.message.includes('already exists')) {
-                                reject(err);
-                                return;
-                            }
-
-                            // 创建聊天记录表
-                            db.run(`
-                                CREATE TABLE IF NOT EXISTS chat_history (
-                                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                    user_id INTEGER NOT NULL,
-                                    session_id TEXT NOT NULL,
-                                    role TEXT NOT NULL,
-                                    message TEXT NOT NULL,
-                                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-                                    FOREIGN KEY(session_id) REFERENCES chat_sessions(session_id) ON DELETE CASCADE
-                                )
-                            `, (err) => {
-                                if (err && !err.message.includes('already exists')) {
-                                    reject(err);
-                                    return;
-                                }
-
-                                // 创建API使用记录表
-                                db.run(`
-                                    CREATE TABLE IF NOT EXISTS api_usage (
-                                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                                        user_id INTEGER NOT NULL,
-                                        request_tokens INTEGER DEFAULT 0,
-                                        response_tokens INTEGER DEFAULT 0,
-                                        total_tokens INTEGER DEFAULT 0,
-                                        model_name TEXT,
-                                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                                    )
-                                `, (err) => {
-                                    if (err && !err.message.includes('already exists')) {
-                                        reject(err);
-                                        return;
-                                    }
-
-                                    // 创建索引以优化查询性能
-                                    db.run('CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)', (err) => {
-                                        if (err && !err.message.includes('already exists')) {
-                                            reject(err);
-                                            return;
-                                        }
-
-                                        db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_user_id ON chat_history(user_id)', (err) => {
-                                            if (err && !err.message.includes('already exists')) {
-                                                reject(err);
-                                                return;
-                                            }
-
-                                            db.run('CREATE INDEX IF NOT EXISTS idx_chat_history_session_id ON chat_history(session_id)', (err) => {
-                                                if (err && !err.message.includes('already exists')) {
-                                                    reject(err);
-                                                    return;
-                                                }
-
-                                                db.run('CREATE INDEX IF NOT EXISTS idx_api_usage_user_id ON api_usage(user_id)', (err) => {
-                                                    if (err && !err.message.includes('already exists')) {
-                                                        reject(err);
-                                                        return;
-                                                    }
-
-                                                    db.run('CREATE INDEX IF NOT EXISTS idx_api_usage_created_at ON api_usage(created_at)', (err) => {
-                                                        if (err && !err.message.includes('already exists')) {
-                                                            reject(err);
-                                                            return;
-                                                        }
-
-                                                        // 创建初始用户
-                                                        createInitialUser(db).then(() => {
-                                                            db.close();
-                                                            resolve();
-                                                        }).catch((error) => {
-                                                            db.close();
-                                                            reject(error);
-                                                        });
-                                                    });
-                                                });
-                                            });
-                                        });
-                                    });
-                                });
-                            });
-                        });
+                        i++;
+                        runNext();
                     });
-                });
+                }
+
+                runNext();
             });
         });
     });

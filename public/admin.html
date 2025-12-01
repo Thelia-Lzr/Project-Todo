@@ -99,6 +99,33 @@
                     <div class="loading">加载中...</div>
                 </div>
             </section>
+
+            <!-- AI 服务设置 -->
+            <section class="admin-section">
+                <div class="section-header">
+                    <h2>🤖 AI 服务设置</h2>
+                </div>
+                <div class="ai-service-settings">
+                    <div class="form-group">
+                        <label for="aiServiceType">AI 服务类型</label>
+                        <select id="aiServiceType">
+                            <option value="gemini">Gemini (Google)</option>
+                            <option value="deepseek">DeepSeek</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="geminiApiKeyGroup">
+                        <label for="adminGeminiApiKey">Gemini API Key</label>
+                        <input type="text" id="adminGeminiApiKey" placeholder="请输入 Gemini API Key">
+                    </div>
+                    <div class="form-group" id="deepseekApiKeyGroup" style="display:none;">
+                        <label for="adminDeepseekApiKey">DeepSeek API Key</label>
+                        <input type="text" id="adminDeepseekApiKey" placeholder="请输入 DeepSeek API Key">
+                    </div>
+                    <div class="form-group">
+                        <button class="btn-primary" id="saveAiServiceBtn">保存设置</button>
+                    </div>
+                </div>
+            </section>
         </main>
     </div>
 

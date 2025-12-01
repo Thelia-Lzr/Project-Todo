@@ -318,6 +318,20 @@ class TodoApp {
         return localStorage.getItem('geminiApiKey') || '';
     }
 
+    // 返回管理员偏好的AI服务类型：'gemini' 或 'deepseek'
+    getPreferredAiService() {
+        return localStorage.getItem('preferredAiService') || 'gemini';
+    }
+
+    // 从管理员本地存储读取对应服务的API Key（优先使用admin存储的key）
+    getAdminApiKey(service) {
+        if (service === 'deepseek') {
+            return localStorage.getItem('adminDeepseekApiKey') || '';
+        }
+        // 默认返回 Gemini 管理员key或普通 geminiApiKey
+        return localStorage.getItem('adminGeminiApiKey') || this.getGeminiApiKey();
+    }
+
     removeGeminiApiKey() {
         localStorage.removeItem('geminiApiKey');
     }
@@ -336,88 +350,89 @@ class TodoApp {
             console.warn('⚠️ initAIChat 已跳过：用户未登录或 userId 缺失');
             return false;
         }
+        // 根据管理员偏好选择服务（gemini 或 deepseek）
+        const preferred = this.getPreferredAiService();
+        this.preferredAiService = preferred;
 
-        // 自动从后端获取API Key
-        if (!this.geminiApiKey) {
-            try {
-                console.log('🔑 正在从服务器获取 API Key...');
-                const response = await fetch(`${this.apiBaseURL}/chat/api-key`, {
-                    headers: {
-                        'Authorization': `Bearer ${this.token}`
-                    }
-                });
+        // 优先使用管理员在 admin 面板保存的 key
+        const adminKey = this.getAdminApiKey(preferred);
 
-                const data = await response.json();
-                
-                if (data.success && data.apiKey) {
-                    this.geminiApiKey = data.apiKey;
-                    console.log('✅ API Key 获取成功');
-                } else {
-                    throw new Error(data.message || 'API Key 获取失败');
-                }
-            } catch (error) {
-                console.error('❌ 获取 API Key 失败:', error);
+        if (preferred === 'deepseek') {
+            // DeepSeek 不需要额外的init端点；只要有API Key即可使用
+            if (!adminKey) {
+                this.chatSession = false;
                 this.apiKeyPanel.style.display = 'none';
                 this.chatArea.style.display = 'flex';
-                this.updateAIStatus('未配置', false);
-                this.showSystemMessage(`⚠️ API Key 未配置\n\n${error.message}\n\n请联系管理员配置 Gemini API Key。`);
+                this.updateAIStatus('未配置 (DeepSeek)', false);
+                this.showSystemMessage('⚠️ DeepSeek API Key 未配置，请在管理员面板配置 DeepSeek API Key。');
                 return false;
             }
+
+            this.deepseekApiKey = adminKey;
+            this.chatSession = true;
+            this.apiKeyPanel.style.display = 'none';
+            this.chatArea.style.display = 'flex';
+            this.updateAIStatus('已连接 (DeepSeek)', true);
+            await this.initChatHistory();
+            return true;
+        }
+
+        // 默认使用 Gemini
+        this.geminiApiKey = adminKey || this.getGeminiApiKey();
+        if (!this.geminiApiKey) {
+            this.chatSession = false;
+            this.apiKeyPanel.style.display = 'none';
+            this.chatArea.style.display = 'flex';
+            this.updateAIStatus('未配置 (Gemini)', false);
+            this.showSystemMessage('⚠️ Gemini API Key 未配置，请联系管理员配置 GEMINI_API_KEY。');
+            return false;
         }
 
         try {
-            console.log('🤖 正在连接 AI 后端...');
-            console.log('📍 API URL:', `${this.pythonBaseURL}/gemini/init`);
-            
-            // 直接调用Python后端初始化（通过Node.js代理）
+            console.log('🤖 正在连接 Gemini 后端...');
             const response = await fetch(`${this.pythonBaseURL}/gemini/init`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    api_key: this.geminiApiKey
-                })
+                body: JSON.stringify({ api_key: this.geminiApiKey })
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
+            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             const data = await response.json();
-            
             if (data.success) {
                 this.chatSession = true;
                 this.apiKeyPanel.style.display = 'none';
                 this.chatArea.style.display = 'flex';
-                this.updateAIStatus('已连接', true);
-                console.log('✅ AI 后端连接成功');
+                this.updateAIStatus('已连接 (Gemini)', true);
                 await this.initChatHistory();
                 return true;
-            } else {
-                throw new Error(data.error || data.message || '初始化失败');
             }
+            throw new Error(data.error || data.message || '初始化失败');
         } catch (error) {
             console.error('❌ AI 后端连接失败:', error);
-            console.error('📌 可能原因: Python 后端未启动或网络问题');
-            
-            // 显示错误提示
             this.chatSession = false;
             this.apiKeyPanel.style.display = 'none';
             this.chatArea.style.display = 'flex';
             this.updateAIStatus('连接失败', false);
-            
-            // 在聊天区域显示错误消息
-            this.showSystemMessage(`⚠️ AI 后端连接失败: ${error.message}\n\n请确保 Python 后端已启动并运行在 5000 端口。\n\n您仍然可以使用待办功能。`);
-            
+            this.showSystemMessage(`⚠️ AI 后端连接失败: ${error.message}\n\n请确保 Python 后端已启动并运行在 5000 端口。`);
             return false;
         }
     }
 
     // ✅ 注意：API Key 已硬编码，此函数保留供需要时使用
     async saveAndInitGemini() {
-        // 由于 API Key 已硬编码，直接调用 initAIChat 初始化
+        // 保存当前页面输入的 gemini key（仅当页面允许修改时），然后根据管理员偏好初始化
         console.log('🔄 正在初始化 AI 聊天...');
+        // 如果页面上有 gemini 输入框，则保存其值到 localStorage（兼容旧版本）
+        try {
+            const input = document.getElementById('geminiApiKey');
+            if (input && input.value) {
+                this.saveGeminiApiKey(input.value.trim());
+            }
+        } catch (e) {
+            // ignore
+        }
         await this.initAIChat();
     }
 
@@ -626,27 +641,35 @@ class TodoApp {
             this.showTypingIndicator();
 
             // 构建待办事项上下文 - 发送到Python后端
-            let todoContext = '';
+            const timezoneName = Intl.DateTimeFormat().resolvedOptions().timeZone || '本地时区';
+            let todoContext = '用户当前没有待办事项。';
             if (this.todos.length > 0) {
-                const todoList = this.todos.map((todo, index) => {
-                    const status = todo.completed ? '✓ 已完成' : '○ 未完成';
-                    const dueTime = todo.due_date ? ` (截止: ${this.formatDateTime(todo.due_date)})` : '';
-                    return `${index + 1}. [ID:${todo.id}] ${status}: ${todo.text}${dueTime}`;
-                }).join('\n');
-                todoContext = `用户当前的待办事项：\n${todoList}`;
-            } else {
-                todoContext = '用户当前没有待办事项。';
+                const sortedTodos = this.getSortedTodos();
+                const snapshotLines = sortedTodos.map((todo, index) =>
+                    this.buildAiTodoSnapshotLine(todo, index, timezoneName)
+                );
+                todoContext = [
+                    `【待办事项快照｜生成时间: ${new Date().toISOString()}｜用户时区: ${timezoneName} (${TimeUtils.getTimezoneString()})】`,
+                    ...snapshotLines
+                ].join('\n');
             }
 
             // 调用Python后端的聊天API
             console.log('📡 发送消息到 AI 后端...');
-            console.log('📍 API URL:', `${this.pythonBaseURL}/gemini/chat`);
-            console.log('🔍 发送user_id:', this.userId);
-            
+            const preferred = this.getPreferredAiService();
+            console.log('📍 偏好服务:', preferred, ' 发送user_id:', this.userId);
+
             // 添加当前时间信息 - 帮助AI进行时间判断（显示用户本地时区）
             const currentTimeInfo = `[当前客户端时间: ${TimeUtils.formatDateTime(TimeUtils.toUTC())}]`;
-            
-            const response = await fetch(`${this.pythonBaseURL}/gemini/chat`, {
+
+            let endpoint = `${this.pythonBaseURL}/gemini/chat`;
+            let apiKeyToSend = this.geminiApiKey;
+            if (preferred === 'deepseek') {
+                endpoint = `${this.pythonBaseURL}/deepseek/chat`;
+                apiKeyToSend = this.getAdminApiKey('deepseek') || this.deepseekApiKey || '';
+            }
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -654,9 +677,10 @@ class TodoApp {
                 body: JSON.stringify({
                     message: `${currentTimeInfo} ${message}`,
                     session_id: this.sessionId,
-                    api_key: this.geminiApiKey,
+                    api_key: apiKeyToSend,
                     todo_context: todoContext,
-                    user_id: this.userId // 添加user_id用于记录API使用
+                    user_id: this.userId, // 添加user_id用于记录API使用
+                    timezone: timezoneName // 新增：发送用户时区
                 })
             });
 
@@ -1742,6 +1766,69 @@ class TodoApp {
 
         const diffDays = Math.floor(diffHours / 24);
         return `${diffDays}天后`;
+    }
+
+    buildAiTodoSnapshotLine(todo, index, timezoneLabel) {
+        const statusSymbol = todo.completed ? '✓ 已完成' : '○ 未完成';
+        const normalizedText = (todo.text || '').replace(/\s+/g, ' ').trim() || '(未填写内容)';
+        const dueUtc = todo.due_date || '未设置';
+        const dueLocal = todo.due_date ? TimeUtils.formatDateTime(todo.due_date, false) : '未设置';
+        const dueState = this.describeDueState(todo.due_date);
+        return `${index + 1}. [ID:${todo.id}] ${statusSymbol} ${normalizedText}\n    - 截止(本地 ${timezoneLabel}): ${dueLocal}\n    - 截止(UTC): ${dueUtc}\n    - 时间状态: ${dueState}`;
+    }
+
+    describeDueState(dueDate) {
+        if (!dueDate) {
+            return '无截止时间';
+        }
+
+        const due = TimeUtils.toLocal(dueDate);
+        if (!due) {
+            return '截止时间无效';
+        }
+
+        const now = new Date();
+        const diffMs = due.getTime() - now.getTime();
+        const absMs = Math.abs(diffMs);
+        const human = this.formatDurationForAI(absMs);
+
+        if (diffMs < 0) {
+            return `⚠️ 已逾期 ${human}`;
+        }
+
+        if (absMs < 60000) {
+            return '不足1分钟后到期';
+        }
+
+        return `剩余 ${human}`;
+    }
+
+    formatDurationForAI(ms) {
+        if (!ms || ms < 60000) {
+            return '不到1分钟';
+        }
+
+        const totalMinutes = Math.floor(ms / 60000);
+        const days = Math.floor(totalMinutes / (60 * 24));
+        const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+        const minutes = totalMinutes % 60;
+
+        const parts = [];
+        if (days > 0) {
+            parts.push(`${days}天`);
+        }
+        if (hours > 0) {
+            parts.push(`${hours}小时`);
+        }
+        if (minutes > 0 && parts.length < 2) {
+            parts.push(`${minutes}分钟`);
+        }
+
+        if (parts.length === 0) {
+            parts.push('不到1分钟');
+        }
+
+        return parts.join(' ');
     }
 
     escapeHtml(text) {
