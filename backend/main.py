@@ -8,7 +8,7 @@ import re
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import google.generativeai as genai
 import pytz
@@ -27,6 +27,13 @@ MODEL_NAME = os.getenv('GEMINI_MODEL_NAME', 'gemini-2.5-flash')
 DEEPSEEK_MODEL_DEFAULT = os.getenv('DEEPSEEK_MODEL_DEFAULT', 'deepseek-chat')
 DEFAULT_PORT = int(os.getenv('PORT', 5000))
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+OPENROUTER_REFERER = os.getenv('OPENROUTER_REFERER', 'https://github.com/Thelia-Lzr/Project-Todo')
+OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', 'TodoList AI Assistant')
+OPENROUTER_SETTING_KEYS = (
+    'openrouter_api_key',
+    'openrouter_default_model',
+    'openrouter_model_options',
+)
 
 chat_sessions: Dict[str, Any] = {}
 
@@ -55,6 +62,63 @@ def get_server_deepseek_key() -> Optional[str]:
     except Exception:
         return None
     return None
+
+
+def parse_model_options(raw_value: Optional[str]) -> List[str]:
+    if not raw_value:
+        return []
+
+    value = raw_value.strip()
+    if not value:
+        return []
+
+    try:
+        parsed = json.loads(value)
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    except Exception:
+        pass
+
+    parts = re.split(r'[\n,]+', value)
+    return [part.strip() for part in parts if part.strip()]
+
+
+def get_openrouter_settings() -> Dict[str, Any]:
+    config = {
+        'api_key': (os.getenv('OPENROUTER_API_KEY') or '').strip(),
+        'default_model': (os.getenv('OPENROUTER_DEFAULT_MODEL') or '').strip(),
+        'model_options': parse_model_options(os.getenv('OPENROUTER_MODEL_OPTIONS', '')),
+    }
+
+    db_path = _db_path()
+    if os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT key, value FROM admin_settings WHERE key IN (?, ?, ?)",
+                OPENROUTER_SETTING_KEYS,
+            )
+            rows = cur.fetchall()
+            conn.close()
+            for key, value in rows:
+                if key == 'openrouter_api_key' and value:
+                    config['api_key'] = value.strip()
+                elif key == 'openrouter_default_model' and value:
+                    config['default_model'] = value.strip()
+                elif key == 'openrouter_model_options' and value:
+                    config['model_options'] = parse_model_options(value)
+        except Exception:
+            # If the admin_settings table does not exist yet, fall back to env vars silently
+            pass
+
+    if not config['default_model']:
+        if config['model_options']:
+            config['default_model'] = config['model_options'][0]
+        elif config['api_key']:
+            config['default_model'] = 'openrouter/auto'
+
+    return config
 
 
 def record_api_usage(user_id: Optional[int], request_text: str, response_text: str, model_name: str) -> None:
@@ -208,6 +272,18 @@ def deepseek_status():
     return jsonify({'status': 'running', 'deepseek_configured': key_present, 'timestamp': datetime.now().isoformat()})
 
 
+@app.route('/api/openrouter/status', methods=['GET'])
+def openrouter_status():
+    settings = get_openrouter_settings()
+    configured = bool(settings.get('api_key'))
+    return jsonify({
+        'status': 'running' if configured else 'missing_config',
+        'openrouter_configured': configured,
+        'default_model': settings.get('default_model'),
+        'timestamp': datetime.now().isoformat(),
+    })
+
+
 @app.route('/api/gemini/chat', methods=['POST'])
 def gemini_chat():
     try:
@@ -292,6 +368,75 @@ def deepseek_chat():
         record_api_usage(user_id, user_message, reply, model)
 
         return jsonify({'success': True, 'message': reply, 'timestamp': datetime.now().isoformat(), 'raw': result})
+    except Exception as exc:
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/openrouter/chat', methods=['POST'])
+def openrouter_chat():
+    try:
+        data = request.get_json(silent=True) or {}
+        user_message = data.get('message')
+        if not user_message:
+            return jsonify({'success': False, 'error': '消息不能为空'}), 400
+
+        settings = get_openrouter_settings()
+        api_key = (data.get('api_key') or settings.get('api_key') or '').strip()
+        if not api_key:
+            return jsonify({'success': False, 'error': 'OpenRouter API Key 未配置，请联系管理员'}), 400
+
+        model = (data.get('model') or settings.get('default_model') or '').strip()
+        if not model:
+            return jsonify({'success': False, 'error': 'OpenRouter 默认模型未配置，请在管理面板设置'}), 400
+
+        todo_context = data.get('todo_context', '')
+        client_tz = data.get('timezone')
+        user_id = data.get('user_id')
+        temperature = data.get('temperature', 0.2)
+        max_tokens = data.get('max_tokens', 900)
+
+        system_prompt = build_system_prompt(todo_context, client_tz)
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': user_message},
+        ]
+
+        headers = {
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+            'HTTP-Referer': OPENROUTER_REFERER,
+            'X-Title': OPENROUTER_APP_NAME,
+        }
+
+        payload = {
+            'model': model,
+            'messages': messages,
+            'temperature': temperature,
+            'max_tokens': max_tokens,
+        }
+
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+
+        if resp.status_code != 200:
+            return jsonify({'success': False, 'error': f'OpenRouter API错误: {resp.status_code} {resp.text}'}), resp.status_code
+
+        result = resp.json()
+        reply = result.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        record_api_usage(user_id, user_message, reply, model)
+
+        return jsonify({
+            'success': True,
+            'message': reply,
+            'timestamp': datetime.now().isoformat(),
+            'model': model,
+            'raw': result,
+        })
     except Exception as exc:
         return jsonify({'success': False, 'error': str(exc)}), 500
 

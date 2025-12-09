@@ -320,13 +320,20 @@ class TodoApp {
 
     // 返回管理员偏好的AI服务类型：'gemini' 或 'deepseek'
     getPreferredAiService() {
-        return localStorage.getItem('preferredAiService') || 'gemini';
+        const stored = (localStorage.getItem('preferredAiService') || '').toLowerCase();
+        if (['gemini', 'deepseek', 'openrouter'].includes(stored)) {
+            return stored;
+        }
+        return 'gemini';
     }
 
     // 从管理员本地存储读取对应服务的API Key（优先使用admin存储的key）
     getAdminApiKey(service) {
         if (service === 'deepseek') {
             return localStorage.getItem('adminDeepseekApiKey') || '';
+        }
+        if (service === 'openrouter') {
+            return localStorage.getItem('adminOpenrouterApiKey') || '';
         }
         // 默认返回 Gemini 管理员key或普通 geminiApiKey
         return localStorage.getItem('adminGeminiApiKey') || this.getGeminiApiKey();
@@ -354,8 +361,8 @@ class TodoApp {
         const preferred = this.getPreferredAiService();
         this.preferredAiService = preferred;
 
-        // 优先使用管理员在 admin 面板保存的 key
-        const adminKey = this.getAdminApiKey(preferred);
+        // 优先使用管理员在 admin 面板保存的 key（OpenRouter 不需要）
+        const adminKey = preferred === 'openrouter' ? null : this.getAdminApiKey(preferred);
 
         if (preferred === 'deepseek') {
             // DeepSeek 不需要额外的init端点；只要有API Key即可使用
@@ -373,6 +380,32 @@ class TodoApp {
             this.apiKeyPanel.style.display = 'none';
             this.chatArea.style.display = 'flex';
             this.updateAIStatus('已连接 (DeepSeek)', true);
+            await this.initChatHistory();
+            return true;
+        }
+
+        if (preferred === 'openrouter') {
+            try {
+                const statusResp = await fetch(`${this.pythonBaseURL}/openrouter/status`);
+                if (statusResp.ok) {
+                    const statusData = await statusResp.json();
+                    if (!statusData.openrouter_configured) {
+                        this.chatSession = false;
+                        this.apiKeyPanel.style.display = 'none';
+                        this.chatArea.style.display = 'flex';
+                        this.updateAIStatus('未配置 (OpenRouter)', false);
+                        this.showSystemMessage('⚠️ OpenRouter API Key 未配置，请在管理员面板填写并保存。');
+                        return false;
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ OpenRouter 状态检查失败:', error);
+            }
+
+            this.chatSession = true;
+            this.apiKeyPanel.style.display = 'none';
+            this.chatArea.style.display = 'flex';
+            this.updateAIStatus('已连接 (OpenRouter)', true);
             await this.initChatHistory();
             return true;
         }
@@ -663,10 +696,28 @@ class TodoApp {
             const currentTimeInfo = `[当前客户端时间: ${TimeUtils.formatDateTime(TimeUtils.toUTC())}]`;
 
             let endpoint = `${this.pythonBaseURL}/gemini/chat`;
-            let apiKeyToSend = this.geminiApiKey;
+            const payload = {
+                message: `${currentTimeInfo} ${message}`,
+                session_id: this.sessionId,
+                todo_context: todoContext,
+                user_id: this.userId, // 添加user_id用于记录API使用
+                timezone: timezoneName // 新增：发送用户时区
+            };
+
             if (preferred === 'deepseek') {
                 endpoint = `${this.pythonBaseURL}/deepseek/chat`;
-                apiKeyToSend = this.getAdminApiKey('deepseek') || this.deepseekApiKey || '';
+                const deepseekKey = this.getAdminApiKey('deepseek') || this.deepseekApiKey || '';
+                if (deepseekKey) {
+                    payload.api_key = deepseekKey;
+                }
+            } else if (preferred === 'openrouter') {
+                endpoint = `${this.pythonBaseURL}/openrouter/chat`;
+                const openrouterKey = this.getAdminApiKey('openrouter');
+                if (openrouterKey) {
+                    payload.api_key = openrouterKey;
+                }
+            } else if (this.geminiApiKey) {
+                payload.api_key = this.geminiApiKey;
             }
 
             const response = await fetch(endpoint, {
@@ -674,14 +725,7 @@ class TodoApp {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    message: `${currentTimeInfo} ${message}`,
-                    session_id: this.sessionId,
-                    api_key: apiKeyToSend,
-                    todo_context: todoContext,
-                    user_id: this.userId, // 添加user_id用于记录API使用
-                    timezone: timezoneName // 新增：发送用户时区
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {

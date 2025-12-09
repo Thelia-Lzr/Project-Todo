@@ -56,6 +56,22 @@ app.use('/api/deepseek', httpProxy(PYTHON_BACKEND, {
     }
 }));
 
+// Python后端代理 - 将/api/openrouter请求转发到Python后端
+app.use('/api/openrouter', httpProxy(PYTHON_BACKEND, {
+    proxyReqPathResolver: (req) => {
+        const fullPath = '/api/openrouter' + req.url;
+        console.log(`🔄 代理请求 (openrouter): ${req.url} → ${fullPath}`);
+        return fullPath;
+    },
+    proxyErrorHandler: (err, res, next) => {
+        console.error('❌ 代理错误 (openrouter):', err.message);
+        res.status(503).json({
+            success: false,
+            error: 'Python后端连接失败，请确保 Python 后端在运行 (http://localhost:5000)'
+        });
+    }
+}));
+
 // API 路由
 app.use('/api/auth', authRoutes);
 app.use('/api/todos', todosRoutes);

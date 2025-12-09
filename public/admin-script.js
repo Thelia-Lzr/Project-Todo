@@ -6,43 +6,65 @@ class AdminApp {
         this.users = [];
         this.sessions = [];
         this.verified = false;
+        this.openrouterModelOptions = [];
         this.init();
     }
 
-    init() {
-        // 检查是否已登录
+    async init() {
         const username = this.getUsername();
-        if (!username || username !== 'Thelia') {
-            alert('请先以管理员身份登录！');
+        if (!username) {
+            alert('请先登录账号！');
             window.location.href = '/';
             return;
         }
 
-        // 绑定验证表单事件
         const verifyForm = document.getElementById('verifyForm');
         if (verifyForm) {
             verifyForm.addEventListener('submit', (e) => this.handleVerify(e));
         }
-        
-        // 绑定其他事件
+
         this.bindEvents();
+
+        // 已经验证过的会话直接显示面板
+        if (this.token) {
+            try {
+                const verifyResp = await fetch(`${this.apiBaseURL}/admin/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+
+                const data = await verifyResp.json();
+                if (data.success && data.isAdmin) {
+                    this.verified = true;
+                    this.showAdminPanel(data.username || username);
+                }
+            } catch (error) {
+                console.warn('自动验证管理员失败:', error);
+            }
+        }
     }
 
-    async handleVerify(e) {
-        e.preventDefault();
-        
-        const password = document.getElementById('adminPassword').value;
+    async handleVerify(event) {
+        event.preventDefault();
+        const passwordInput = document.getElementById('adminPassword');
         const errorMsg = document.getElementById('verifyError');
-        errorMsg.classList.remove('show');
 
+        if (errorMsg) {
+            errorMsg.textContent = '';
+            errorMsg.classList.remove('show');
+        }
+
+        const password = passwordInput ? passwordInput.value.trim() : '';
         if (!password) {
-            errorMsg.textContent = '请输入密码';
-            errorMsg.classList.add('show');
+            if (errorMsg) {
+                errorMsg.textContent = '请输入管理员密码';
+                errorMsg.classList.add('show');
+            }
             return;
         }
 
         try {
-            // 使用当前用户的密码验证（即Thelia的密码）
             const response = await fetch(`${this.apiBaseURL}/auth/login`, {
                 method: 'POST',
                 headers: {
@@ -50,55 +72,44 @@ class AdminApp {
                 },
                 body: JSON.stringify({
                     username: 'Thelia',
-                    password: password
+                    password
                 })
             });
 
             const data = await response.json();
-            
-            if (data.success) {
-                // 更新 token（使用新验证的 token）
+            if (data.success && data.token) {
+                localStorage.setItem('todolistToken', data.token);
                 this.token = data.token;
                 this.verified = true;
-                this.showAdminPanel();
-                this.loadUsers();
-                this.loadChatSessions();
+                this.showAdminPanel('Thelia');
             } else {
-                errorMsg.textContent = '密码错误';
-                errorMsg.classList.add('show');
+                if (errorMsg) {
+                    errorMsg.textContent = data.message || '密码错误';
+                    errorMsg.classList.add('show');
+                }
             }
         } catch (error) {
-            console.error('验证失败:', error);
-            errorMsg.textContent = '验证失败，请稍后重试';
-            errorMsg.classList.add('show');
+            console.error('管理员验证失败:', error);
+            if (errorMsg) {
+                errorMsg.textContent = '验证失败，请稍后再试';
+                errorMsg.classList.add('show');
+            }
         }
     }
 
-    showAdminPanel() {
-        document.getElementById('adminVerifyPage').classList.remove('active');
-        document.getElementById('adminPanelPage').classList.add('active');
-        document.getElementById('adminUser').textContent = `👑 Thelia`;
-        
-        // 加载数据
-        this.loadApiKey();
+    showAdminPanel(adminName = '管理员') {
+        const verifyPage = document.getElementById('adminVerifyPage');
+        const panelPage = document.getElementById('adminPanelPage');
+        const adminUser = document.getElementById('adminUser');
+
+        if (verifyPage) verifyPage.classList.remove('active');
+        if (panelPage) panelPage.classList.add('active');
+        if (adminUser) adminUser.textContent = `👑 ${adminName}`;
+
+        this.loadOpenrouterSettings();
         this.checkQuota();
         this.loadUsers();
         this.loadChatSessions();
-        
-        // 启动配额自动刷新（每30秒）
-        this.startQuotaAutoRefresh();
-    }
-    
-    startQuotaAutoRefresh() {
-        // 清除之前的定时器
-        if (this.quotaRefreshTimer) {
-            clearInterval(this.quotaRefreshTimer);
-        }
-        
-        // 每30秒自动刷新一次
-        this.quotaRefreshTimer = setInterval(() => {
-            this.checkQuota();
-        }, 30000); // 30秒
     }
 
     getUsername() {
@@ -123,54 +134,83 @@ class AdminApp {
             });
         }
 
-        // ========== AI 服务类型切换与API Key管理 ========== //
+        // ========== AI 服务类型切换与 API Key 管理 ========== //
         const aiServiceTypeSelect = document.getElementById('aiServiceType');
         const geminiApiKeyGroup = document.getElementById('geminiApiKeyGroup');
         const deepseekApiKeyGroup = document.getElementById('deepseekApiKeyGroup');
+        const openrouterSettingsSection = document.getElementById('openrouterSettingsSection');
         const adminGeminiApiKeyInput = document.getElementById('adminGeminiApiKey');
         const adminDeepseekApiKeyInput = document.getElementById('adminDeepseekApiKey');
         const saveAiServiceBtn = document.getElementById('saveAiServiceBtn');
 
-        // 初始化时根据本地存储或默认显示
-        function updateApiKeyInputVisibility() {
-            const type = aiServiceTypeSelect.value;
-            if (type === 'gemini') {
-                geminiApiKeyGroup.style.display = '';
-                deepseekApiKeyGroup.style.display = 'none';
-            } else {
-                geminiApiKeyGroup.style.display = 'none';
-                deepseekApiKeyGroup.style.display = '';
+        if (aiServiceTypeSelect) {
+            const updateAiServiceSections = () => {
+                const type = aiServiceTypeSelect.value;
+                if (geminiApiKeyGroup) {
+                    geminiApiKeyGroup.style.display = type === 'gemini' ? '' : 'none';
+                }
+                if (deepseekApiKeyGroup) {
+                    deepseekApiKeyGroup.style.display = type === 'deepseek' ? '' : 'none';
+                }
+                if (openrouterSettingsSection) {
+                    openrouterSettingsSection.style.display = type === 'openrouter' ? '' : 'none';
+                }
+            };
+
+            aiServiceTypeSelect.addEventListener('change', updateAiServiceSections);
+
+            if (saveAiServiceBtn) {
+                saveAiServiceBtn.addEventListener('click', () => {
+                    const type = aiServiceTypeSelect.value;
+                    localStorage.setItem('preferredAiService', type);
+
+                    if (type === 'gemini') {
+                        const key = adminGeminiApiKeyInput ? adminGeminiApiKeyInput.value.trim() : '';
+                        localStorage.setItem('adminGeminiApiKey', key);
+                        alert('Gemini API Key 已保存，并设置为默认服务');
+                    } else if (type === 'deepseek') {
+                        const key = adminDeepseekApiKeyInput ? adminDeepseekApiKeyInput.value.trim() : '';
+                        localStorage.setItem('adminDeepseekApiKey', key);
+                        alert('DeepSeek API Key 已保存，并设置为默认服务');
+                    } else {
+                        alert('OpenRouter 已设置为默认服务，请在下方配置 API Key 与模型列表');
+                    }
+                });
             }
+
+            window.addEventListener('DOMContentLoaded', () => {
+                if (adminGeminiApiKeyInput) {
+                    adminGeminiApiKeyInput.value = localStorage.getItem('adminGeminiApiKey') || '';
+                }
+                if (adminDeepseekApiKeyInput) {
+                    adminDeepseekApiKeyInput.value = localStorage.getItem('adminDeepseekApiKey') || '';
+                }
+                aiServiceTypeSelect.value = localStorage.getItem('preferredAiService') || 'gemini';
+                updateAiServiceSections();
+            });
         }
-        aiServiceTypeSelect.addEventListener('change', updateApiKeyInputVisibility);
 
-        // 保存API Key到本地存储（可改为后端存储）
-        saveAiServiceBtn.addEventListener('click', function () {
-            const type = aiServiceTypeSelect.value;
-            // 保存管理员选择的默认AI服务
-            localStorage.setItem('preferredAiService', type);
+        // ========== OpenRouter 设置事件绑定 ========== //
+        const openrouterModelOptionsInput = document.getElementById('openrouterModelOptions');
+        const openrouterDefaultModelSelect = document.getElementById('openrouterDefaultModel');
+        const saveOpenrouterSettingsBtn = document.getElementById('saveOpenrouterSettingsBtn');
+        const toggleOpenrouterApiKeyBtn = document.getElementById('toggleOpenrouterApiKey');
 
-            if (type === 'gemini') {
-                const key = adminGeminiApiKeyInput.value.trim();
-                localStorage.setItem('adminGeminiApiKey', key);
-                alert('Gemini API Key 已保存，并设置为默认服务');
-            } else {
-                const key = adminDeepseekApiKeyInput.value.trim();
-                localStorage.setItem('adminDeepseekApiKey', key);
-                alert('DeepSeek API Key 已保存，并设置为默认服务');
-            }
-        });
+        if (openrouterModelOptionsInput) {
+            openrouterModelOptionsInput.addEventListener('input', () => {
+                const options = this.parseModelOptions(openrouterModelOptionsInput.value);
+                const currentSelection = openrouterDefaultModelSelect ? openrouterDefaultModelSelect.value : '';
+                this.populateOpenrouterModelSelect(options, currentSelection);
+            });
+        }
 
-        // 页面加载时恢复API Key
-        window.addEventListener('DOMContentLoaded', function () {
-            const geminiKey = localStorage.getItem('adminGeminiApiKey') || '';
-            const deepseekKey = localStorage.getItem('adminDeepseekApiKey') || '';
-            const preferred = localStorage.getItem('preferredAiService') || 'gemini';
-            adminGeminiApiKeyInput.value = geminiKey;
-            adminDeepseekApiKeyInput.value = deepseekKey;
-            aiServiceTypeSelect.value = preferred;
-            updateApiKeyInputVisibility();
-        });
+        if (toggleOpenrouterApiKeyBtn) {
+            toggleOpenrouterApiKeyBtn.addEventListener('click', () => this.toggleOpenrouterApiKeyVisibility());
+        }
+
+        if (saveOpenrouterSettingsBtn) {
+            saveOpenrouterSettingsBtn.addEventListener('click', () => this.saveOpenrouterSettings());
+        }
     }
 
     getToken() {
@@ -549,128 +589,240 @@ class AdminApp {
         alert('❌ ' + message);
     }
 
-    // ========== API Key 管理 ==========
+    // ========== OpenRouter 设置 ==========
 
-    async loadApiKey() {
+    parseModelOptions(rawText = '') {
+        if (!rawText) {
+            return [];
+        }
+
+        return rawText
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+    }
+
+    populateOpenrouterModelSelect(options = [], selectedValue = '') {
+        this.openrouterModelOptions = options;
+        const select = document.getElementById('openrouterDefaultModel');
+        if (!select) return;
+
+        const fragment = document.createDocumentFragment();
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = options.length ? '请选择模型' : '请先填写模型列表';
+        fragment.appendChild(placeholder);
+
+        options.forEach(modelId => {
+            const option = document.createElement('option');
+            option.value = modelId;
+            option.textContent = modelId;
+            fragment.appendChild(option);
+        });
+
+        select.innerHTML = '';
+        select.appendChild(fragment);
+
+        if (selectedValue && options.includes(selectedValue)) {
+            select.value = selectedValue;
+        } else {
+            select.value = '';
+        }
+
+        select.disabled = options.length === 0;
+    }
+
+    async loadOpenrouterSettings() {
         try {
-            const response = await fetch(`${this.apiBaseURL}/admin/api-key`, {
+            const response = await fetch(`${this.apiBaseURL}/admin/openrouter-config`, {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
             });
 
             const data = await response.json();
-            
-            if (data.success) {
-                const apiKeyInput = document.getElementById('currentApiKey');
-                apiKeyInput.value = data.apiKey;
-                apiKeyInput.dataset.fullKey = data.fullKey; // 保存完整key用于显示
-            } else {
-                console.error('加载API Key失败:', data.message);
+            if (!data.success) {
+                console.warn('加载 OpenRouter 设置失败:', data.message);
+                return;
             }
+
+            const config = data.config || {};
+            const apiKeyInput = document.getElementById('openrouterApiKey');
+            if (apiKeyInput) {
+                apiKeyInput.value = config.apiKey || '';
+                apiKeyInput.type = 'password';
+            }
+
+            const modelOptions = Array.isArray(config.modelOptions) ? config.modelOptions : [];
+            const optionsInput = document.getElementById('openrouterModelOptions');
+            if (optionsInput) {
+                optionsInput.value = modelOptions.join('\n');
+            }
+
+            this.populateOpenrouterModelSelect(modelOptions, config.defaultModel || '');
         } catch (error) {
-            console.error('加载API Key失败:', error);
+            console.error('加载 OpenRouter 设置失败:', error);
         }
     }
 
-    toggleApiKeyVisibility() {
-        const apiKeyInput = document.getElementById('currentApiKey');
-        if (apiKeyInput.type === 'password') {
-            apiKeyInput.type = 'text';
-            apiKeyInput.value = apiKeyInput.dataset.fullKey || apiKeyInput.value;
-        } else {
-            apiKeyInput.type = 'password';
-            const fullKey = apiKeyInput.value;
-            apiKeyInput.value = fullKey.substring(0, 8) + '...' + fullKey.substring(fullKey.length - 4);
-        }
+    toggleOpenrouterApiKeyVisibility() {
+        const input = document.getElementById('openrouterApiKey');
+        if (!input) return;
+        input.type = input.type === 'password' ? 'text' : 'password';
     }
 
-    showChangeApiKeyModal() {
-        document.getElementById('changeApiKeyModal').classList.add('active');
-        document.getElementById('newApiKey').value = '';
-        document.getElementById('confirmApiKey').value = '';
-        document.getElementById('changeApiKeyError').classList.remove('show');
-    }
+    async saveOpenrouterSettings() {
+        const apiKeyInput = document.getElementById('openrouterApiKey');
+        const optionsInput = document.getElementById('openrouterModelOptions');
+        const defaultModelSelect = document.getElementById('openrouterDefaultModel');
+        const errorMsg = document.getElementById('openrouterSettingsError');
 
-    closeChangeApiKeyModal() {
-        document.getElementById('changeApiKeyModal').classList.remove('active');
-    }
-
-    async changeApiKey() {
-        const newApiKey = document.getElementById('newApiKey').value.trim();
-        const confirmApiKey = document.getElementById('confirmApiKey').value.trim();
-        const errorMsg = document.getElementById('changeApiKeyError');
-        
-        errorMsg.classList.remove('show');
-
-        if (!newApiKey) {
-            errorMsg.textContent = '请输入新的 API Key';
-            errorMsg.classList.add('show');
+        if (!apiKeyInput || !optionsInput || !defaultModelSelect) {
             return;
         }
 
-        if (newApiKey !== confirmApiKey) {
-            errorMsg.textContent = '两次输入的 API Key 不一致';
-            errorMsg.classList.add('show');
+        if (errorMsg) {
+            errorMsg.textContent = '';
+            errorMsg.classList.remove('show');
+        }
+
+        const apiKey = apiKeyInput.value.trim();
+        const options = this.parseModelOptions(optionsInput.value);
+        let defaultModel = (defaultModelSelect.value || '').trim();
+
+        if (!apiKey) {
+            if (errorMsg) {
+                errorMsg.textContent = '请填写 OpenRouter API Key';
+                errorMsg.classList.add('show');
+            }
             return;
         }
 
-        if (!newApiKey.startsWith('AIza')) {
-            errorMsg.textContent = 'API Key 格式不正确（应以 AIza 开头）';
-            errorMsg.classList.add('show');
+        if (!defaultModel && options.length > 0) {
+            defaultModel = options[0];
+        }
+
+        if (!defaultModel) {
+            if (errorMsg) {
+                errorMsg.textContent = '请至少输入一个模型并选择默认模型';
+                errorMsg.classList.add('show');
+            }
             return;
+        }
+
+        if (!options.includes(defaultModel)) {
+            options.push(defaultModel);
         }
 
         try {
-            const response = await fetch(`${this.apiBaseURL}/admin/api-key`, {
+            const response = await fetch(`${this.apiBaseURL}/admin/openrouter-config`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${this.token}`
                 },
-                body: JSON.stringify({ apiKey: newApiKey })
+                body: JSON.stringify({
+                    apiKey,
+                    modelOptions: options,
+                    defaultModel
+                })
             });
 
             const data = await response.json();
-            
             if (data.success) {
-                alert('✅ ' + data.message);
-                this.closeChangeApiKeyModal();
-                await this.loadApiKey();
-            } else {
-                errorMsg.textContent = data.message || '更新失败';
+                alert('✅ OpenRouter 设置已保存！');
+                await this.loadOpenrouterSettings();
+            } else if (errorMsg) {
+                errorMsg.textContent = data.message || '保存 OpenRouter 设置失败';
                 errorMsg.classList.add('show');
             }
         } catch (error) {
-            console.error('更新API Key失败:', error);
-            errorMsg.textContent = '更新失败，请重试';
-            errorMsg.classList.add('show');
+            console.error('保存 OpenRouter 设置失败:', error);
+            if (errorMsg) {
+                errorMsg.textContent = '保存失败，请稍后重试';
+                errorMsg.classList.add('show');
+            }
         }
     }
 
     async checkQuota() {
         const quotaDisplay = document.getElementById('quotaDisplay');
         quotaDisplay.innerHTML = '<div class="loading">检查中...</div>';
+        const preferredService = (localStorage.getItem('preferredAiService') || 'gemini').toLowerCase();
+        const serviceLabelMap = {
+            gemini: 'Gemini',
+            deepseek: 'DeepSeek',
+            openrouter: 'OpenRouter'
+        };
+        const fallbackServiceLabel = serviceLabelMap[preferredService] || 'Gemini';
+
+        const buildUsageItem = (label, used = 0, limit, unit = '次') => {
+            const safeUsed = typeof used === 'number' ? used : 0;
+            const hasLimit = typeof limit === 'number' && limit > 0;
+            const percentage = hasLimit ? Math.min(100, (safeUsed / limit) * 100) : 0;
+            const dangerClass = hasLimit && safeUsed >= limit ? 'danger' : '';
+            const text = hasLimit
+                ? `${safeUsed.toLocaleString()} / ${limit.toLocaleString()}`
+                : `${safeUsed.toLocaleString()} ${unit}`;
+
+            return `
+                <div class="usage-item ${dangerClass}">
+                    <div class="usage-label">${label}</div>
+                    ${hasLimit ? `
+                    <div class="usage-bar-container">
+                        <div class="usage-bar" style="width: ${percentage}%"></div>
+                    </div>` : ''}
+                    <div class="usage-text">${text}</div>
+                </div>
+            `;
+        };
+
+        const buildTokenItem = (label, used = 0, limit) => {
+            const safeUsed = typeof used === 'number' ? used : 0;
+            const hasLimit = typeof limit === 'number' && limit > 0;
+            const percentage = hasLimit ? Math.min(100, (safeUsed / limit) * 100) : 0;
+            const text = hasLimit
+                ? `${safeUsed.toLocaleString()} / ${limit.toLocaleString()} tokens`
+                : `${safeUsed.toLocaleString()} tokens`;
+
+            return `
+                <div class="usage-item ${hasLimit && safeUsed >= limit ? 'danger' : ''}">
+                    <div class="usage-label">${label}</div>
+                    ${hasLimit ? `
+                    <div class="usage-bar-container">
+                        <div class="usage-bar" style="width: ${percentage}%"></div>
+                    </div>` : ''}
+                    <div class="usage-text">${text}</div>
+                </div>
+            `;
+        };
 
         try {
-            const response = await fetch(`${this.apiBaseURL}/admin/api-quota`, {
+            const response = await fetch(`${this.apiBaseURL}/admin/api-quota?service=${preferredService}`, {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
             });
 
             const data = await response.json();
+            const serviceLabel = data.serviceLabel || fallbackServiceLabel;
             
             if (data.success) {
                 let statusClass = 'success';
                 if (data.status === 'rate_limited') {
                     statusClass = 'warning';
+                } else if (data.status === 'invalid' || data.status === 'forbidden') {
+                    statusClass = 'danger';
                 }
 
                 let html = `
                     <div class="quota-item">
+                        <span class="quota-label">AI 服务</span>
+                        <span class="quota-value">${serviceLabel}</span>
+                    </div>
+                    <div class="quota-item">
                         <span class="quota-label">API 状态</span>
-                        <span class="quota-value ${statusClass}">${data.info?.status || '未知'}</span>
+                        <span class="quota-value ${statusClass}">${data.info?.status || data.message || '未知'}</span>
                     </div>
                 `;
 
@@ -683,52 +835,38 @@ class AdminApp {
                     `;
                 }
 
-                html += `
+                if (data.info?.type) {
+                    html += `
                     <div class="quota-item">
                         <span class="quota-label">计划类型</span>
-                        <span class="quota-value">${data.info?.type || 'N/A'}</span>
+                        <span class="quota-value">${data.info.type}</span>
                     </div>
-                `;
+                    `;
+                }
 
-                // 显示实时使用情况
-                if (data.usage) {
+                const usage = data.usage || {};
+                const todayStats = usage.today || {};
+                const minuteStats = usage.currentMinute || {};
+
+                if (usage.today) {
                     html += `
                     <div class="quota-section">
-                        <div class="quota-section-title">📊 今日使用情况</div>
+                        <div class="quota-section-title">📊 今日使用情况 (${serviceLabel})</div>
                         <div class="usage-stats">
-                            <div class="usage-item ${data.usage.today.requests >= data.usage.today.requestLimit ? 'danger' : ''}">
-                                <div class="usage-label">请求次数</div>
-                                <div class="usage-bar-container">
-                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.today.requests / data.usage.today.requestLimit) * 100)}%"></div>
-                                </div>
-                                <div class="usage-text">${data.usage.today.requests} / ${data.usage.today.requestLimit}</div>
-                            </div>
-                            ${data.usage.today.tokens ? `
-                            <div class="usage-item">
-                                <div class="usage-label">Token 使用</div>
-                                <div class="usage-text">${data.usage.today.tokens.toLocaleString()}</div>
-                            </div>
-                            ` : ''}
+                            ${buildUsageItem('请求次数', todayStats.requests, todayStats.requestLimit)}
+                            ${typeof todayStats.tokens === 'number' ? buildTokenItem('Token 使用', todayStats.tokens, todayStats.tokenLimit) : ''}
                         </div>
                     </div>
-                    
+                    `;
+                }
+
+                if (usage.currentMinute) {
+                    html += `
                     <div class="quota-section">
                         <div class="quota-section-title">⚡ 当前分钟使用情况</div>
                         <div class="usage-stats">
-                            <div class="usage-item ${data.usage.currentMinute.requests >= data.usage.currentMinute.requestLimit ? 'danger' : ''}">
-                                <div class="usage-label">请求次数</div>
-                                <div class="usage-bar-container">
-                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.currentMinute.requests / data.usage.currentMinute.requestLimit) * 100)}%"></div>
-                                </div>
-                                <div class="usage-text">${data.usage.currentMinute.requests} / ${data.usage.currentMinute.requestLimit}</div>
-                            </div>
-                            <div class="usage-item ${data.usage.currentMinute.tokens >= data.usage.currentMinute.tokenLimit ? 'danger' : ''}">
-                                <div class="usage-label">Token 使用</div>
-                                <div class="usage-bar-container">
-                                    <div class="usage-bar" style="width: ${Math.min(100, (data.usage.currentMinute.tokens / data.usage.currentMinute.tokenLimit) * 100)}%"></div>
-                                </div>
-                                <div class="usage-text">${data.usage.currentMinute.tokens.toLocaleString()} / ${data.usage.currentMinute.tokenLimit.toLocaleString()}</div>
-                            </div>
+                            ${buildUsageItem('请求次数', minuteStats.requests, minuteStats.requestLimit)}
+                            ${typeof minuteStats.tokens === 'number' ? buildTokenItem('Token 使用', minuteStats.tokens, minuteStats.tokenLimit) : ''}
                         </div>
                     </div>
                     `;
@@ -738,7 +876,7 @@ class AdminApp {
                     const limits = data.info.limits;
                     html += `
                     <div class="quota-section">
-                        <div class="quota-section-title">� API 限制</div>
+                        <div class="quota-section-title">📏 API 限制</div>
                         <div class="quota-limits">
                             <div class="quota-limit-item">
                                 <span class="limit-label">每分钟请求数</span>
@@ -768,8 +906,19 @@ class AdminApp {
                     </div>
                     `;
                 }
+
+                if (Array.isArray(data.models) && data.models.length > 0) {
+                    const previewModels = data.models.slice(0, 6);
+                    html += `
+                    <div class="quota-section">
+                        <div class="quota-section-title">🧠 可用模型</div>
+                        <div class="quota-features">
+                            ${previewModels.map(model => `<div class="feature-item">${model.name || model.id}</div>`).join('')}
+                        </div>
+                    </div>
+                    `;
+                }
                 
-                // 添加更新时间
                 const now = new Date();
                 html += `
                     <div class="quota-update-time">
@@ -779,8 +928,12 @@ class AdminApp {
 
                 quotaDisplay.innerHTML = html;
             } else {
-                let statusClass = 'danger';
+                const statusClass = data.status === 'invalid' ? 'danger' : 'warning';
                 quotaDisplay.innerHTML = `
+                    <div class="quota-item">
+                        <span class="quota-label">AI 服务</span>
+                        <span class="quota-value">${serviceLabel}</span>
+                    </div>
                     <div class="quota-item">
                         <span class="quota-label">状态</span>
                         <span class="quota-value ${statusClass}">${data.info?.status || '错误'}</span>
@@ -790,7 +943,7 @@ class AdminApp {
                         <span class="quota-value">${data.info?.type || 'N/A'}</span>
                     </div>
                     <div class="error-note" style="margin-top: 10px; color: var(--danger-color);">
-                        ${data.message}
+                        ${data.message || '无法获取配额信息'}
                     </div>
                     ${data.info?.note ? `<div class="quota-note">${data.info.note}</div>` : ''}
                 `;
@@ -798,6 +951,10 @@ class AdminApp {
         } catch (error) {
             console.error('检查配额失败:', error);
             quotaDisplay.innerHTML = `
+                <div class="quota-item">
+                    <span class="quota-label">AI 服务</span>
+                    <span class="quota-value">${fallbackServiceLabel}</span>
+                </div>
                 <div class="quota-item">
                     <span class="quota-label">状态</span>
                     <span class="quota-value danger">检查失败</span>
