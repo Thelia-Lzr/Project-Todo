@@ -56,7 +56,8 @@ app.use('/api/deepseek', httpProxy(PYTHON_BACKEND, {
     }
 }));
 
-// Python后端代理 - 将/api/openrouter请求转发到Python后端
+// Proxy for OpenRouter API requests: This route forwards /api/openrouter requests to the Python backend.
+// Keeping this proxy separate allows for custom handling, logging, or authentication specific to OpenRouter if needed in the future.
 app.use('/api/openrouter', httpProxy(PYTHON_BACKEND, {
     proxyReqPathResolver: (req) => {
         const fullPath = '/api/openrouter' + req.url;

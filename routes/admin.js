@@ -12,6 +12,9 @@ const ADMIN_SETTING_KEYS = {
     openrouterModelOptions: 'openrouter_model_options'
 };
 
+// Constants for display limits
+const MAX_MODELS_TO_DISPLAY = 20;
+
 const envPath = path.join(__dirname, '../backend/.env');
 
 const parseModelOptions = (raw = '') => {
@@ -34,12 +37,18 @@ const parseModelOptions = (raw = '') => {
 
 const readAdminSettings = (db, keys = []) => {
     if (!keys.length) return Promise.resolve({});
-    const placeholders = keys.map(() => '?').join(', ');
+    
+    // Only allow keys that are present in ADMIN_SETTING_KEYS values
+    const allowedKeys = Object.values(ADMIN_SETTING_KEYS);
+    const filteredKeys = keys.filter(key => allowedKeys.includes(key));
+    if (!filteredKeys.length) return Promise.resolve({});
+    
+    const placeholders = filteredKeys.map(() => '?').join(', ');
 
     return new Promise((resolve, reject) => {
         db.all(
             `SELECT key, value FROM admin_settings WHERE key IN (${placeholders})`,
-            keys,
+            filteredKeys,
             (err, rows = []) => {
                 if (err) {
                     reject(err);
@@ -485,10 +494,14 @@ router.get('/openrouter-config', authMiddleware, verifyAdmin, async (req, res) =
             settings[ADMIN_SETTING_KEYS.openrouterModelOptions] || process.env.OPENROUTER_MODEL_OPTIONS || ''
         );
 
+        // Mask API key for security - return only first 8 and last 4 characters
+        const maskedApiKey = apiKey ? `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}` : '';
+
         res.json({
             success: true,
             config: {
-                apiKey,
+                apiKey: maskedApiKey,
+                apiKeyConfigured: !!apiKey,
                 defaultModel,
                 modelOptions
             }
@@ -584,7 +597,9 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
         if (service === 'deepseek') {
             serviceFilterClause = "AND model_name LIKE 'deepseek%'";
         } else if (service === 'openrouter') {
-            serviceFilterClause = "AND model_name LIKE 'openrouter%'";
+            // OpenRouter model names can be like "openrouter/auto", "meta-llama/...", etc.
+            // Filter by common OpenRouter patterns or prefix
+            serviceFilterClause = "AND (model_name LIKE 'openrouter%' OR model_name LIKE 'meta-%' OR model_name LIKE '%/%')";
         }
 
         let todayStats = {};
@@ -643,8 +658,13 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                     ADMIN_SETTING_KEYS.openrouterModelOptions
                 ]);
             }
+        } catch (error) {
+            // Log error but ensure db is closed
+            console.error('Error fetching usage stats:', error);
         } finally {
-            db.close();
+            if (db) {
+                db.close();
+            }
         }
 
         const usagePayload = {
@@ -811,7 +831,7 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
                     modelName: preferredModel,
                     displayName,
                     usage: usagePayload,
-                    models: models.slice(0, 20).map(model => ({
+                    models: models.slice(0, MAX_MODELS_TO_DISPLAY).map(model => ({
                         id: model.id,
                         name: model.name,
                         context_length: model.context_length,

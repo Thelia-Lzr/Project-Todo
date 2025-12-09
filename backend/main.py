@@ -29,7 +29,8 @@ DEFAULT_PORT = int(os.getenv('PORT', 5000))
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 OPENROUTER_REFERER = os.getenv('OPENROUTER_REFERER', 'https://github.com/Thelia-Lzr/Project-Todo')
 OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', 'TodoList AI Assistant')
-OPENROUTER_SETTING_KEYS = (
+# Constants for OpenRouter settings keys
+openrouter_setting_keys = (
     'openrouter_api_key',
     'openrouter_default_model',
     'openrouter_model_options',
@@ -92,15 +93,15 @@ def get_openrouter_settings() -> Dict[str, Any]:
 
     db_path = _db_path()
     if os.path.exists(db_path):
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
             cur.execute(
                 "SELECT key, value FROM admin_settings WHERE key IN (?, ?, ?)",
-                OPENROUTER_SETTING_KEYS,
+                openrouter_setting_keys,
             )
             rows = cur.fetchall()
-            conn.close()
             for key, value in rows:
                 if key == 'openrouter_api_key' and value:
                     config['api_key'] = value.strip()
@@ -111,6 +112,9 @@ def get_openrouter_settings() -> Dict[str, Any]:
         except Exception:
             # If the admin_settings table does not exist yet, fall back to env vars silently
             pass
+        finally:
+            if conn:
+                conn.close()
 
     if not config['default_model']:
         if config['model_options']:
@@ -304,6 +308,7 @@ def gemini_chat():
         try:
             genai.configure(api_key=api_key)
         except Exception:
+            # If the admin_settings table does not exist yet, fall back to env vars silently
             pass
 
         if session_id not in chat_sessions:
@@ -381,7 +386,7 @@ def openrouter_chat():
             return jsonify({'success': False, 'error': '消息不能为空'}), 400
 
         settings = get_openrouter_settings()
-        api_key = (data.get('api_key') or settings.get('api_key') or '').strip()
+        api_key = (settings.get('api_key') or '').strip()
         if not api_key:
             return jsonify({'success': False, 'error': 'OpenRouter API Key 未配置，请联系管理员'}), 400
 
@@ -389,11 +394,30 @@ def openrouter_chat():
         if not model:
             return jsonify({'success': False, 'error': 'OpenRouter 默认模型未配置，请在管理面板设置'}), 400
 
+        # Validate model against allowed model_options
+        allowed_models = settings.get('model_options', [])
+        if allowed_models and model not in allowed_models:
+            return jsonify({'success': False, 'error': f'不允许使用该模型: {model}'}), 400
+
         todo_context = data.get('todo_context', '')
         client_tz = data.get('timezone')
         user_id = data.get('user_id')
-        temperature = data.get('temperature', 0.2)
-        max_tokens = data.get('max_tokens', 900)
+        
+        # Validate temperature parameter
+        try:
+            temperature = float(data.get('temperature', 0.2))
+        except (TypeError, ValueError):
+            temperature = 0.2
+        if not (0 <= temperature <= 2):
+            temperature = max(0, min(temperature, 2))
+
+        # Validate max_tokens parameter
+        try:
+            max_tokens = int(data.get('max_tokens', 900))
+        except (TypeError, ValueError):
+            max_tokens = 900
+        if not (1 <= max_tokens <= 4096):
+            max_tokens = max(1, min(max_tokens, 4096))
 
         system_prompt = build_system_prompt(todo_context, client_tz)
         messages = [
@@ -415,15 +439,20 @@ def openrouter_chat():
             'max_tokens': max_tokens,
         }
 
-        resp = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers=headers,
-            json=payload,
-            timeout=30,
-        )
+        try:
+            resp = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers=headers,
+                json=payload,
+                timeout=30,
+            )
+        except requests.exceptions.Timeout:
+            return jsonify({'success': False, 'error': 'OpenRouter API 请求超时，请稍后重试'}), 504
 
         if resp.status_code != 200:
-            return jsonify({'success': False, 'error': f'OpenRouter API错误: {resp.status_code} {resp.text}'}), resp.status_code
+            # Log full error server-side but return generic message to client
+            print(f'OpenRouter API error: {resp.status_code} {resp.text}')
+            return jsonify({'success': False, 'error': f'OpenRouter API 错误: {resp.status_code}'}), resp.status_code
 
         result = resp.json()
         reply = result.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -435,10 +464,13 @@ def openrouter_chat():
             'message': reply,
             'timestamp': datetime.now().isoformat(),
             'model': model,
-            'raw': result,
         })
+    except requests.exceptions.Timeout:
+        return jsonify({'success': False, 'error': 'OpenRouter API 请求超时，请稍后重试'}), 504
     except Exception as exc:
-        return jsonify({'success': False, 'error': str(exc)}), 500
+        # Log full error server-side but return generic message to client
+        print(f'OpenRouter chat error: {str(exc)}')
+        return jsonify({'success': False, 'error': '处理请求时发生错误'}), 500
 
 
 @app.route('/api/gemini/clear-session', methods=['POST'])

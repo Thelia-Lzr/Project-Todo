@@ -333,7 +333,8 @@ class TodoApp {
             return localStorage.getItem('adminDeepseekApiKey') || '';
         }
         if (service === 'openrouter') {
-            return localStorage.getItem('adminOpenrouterApiKey') || '';
+            // Do NOT retrieve OpenRouter API key from localStorage for security reasons.
+            return '';
         }
         // 默认返回 Gemini 管理员key或普通 geminiApiKey
         return localStorage.getItem('adminGeminiApiKey') || this.getGeminiApiKey();
@@ -712,10 +713,7 @@ class TodoApp {
                 }
             } else if (preferred === 'openrouter') {
                 endpoint = `${this.pythonBaseURL}/openrouter/chat`;
-                const openrouterKey = this.getAdminApiKey('openrouter');
-                if (openrouterKey) {
-                    payload.api_key = openrouterKey;
-                }
+                // Do NOT send OpenRouter API key from client; backend uses its own key.
             } else if (this.geminiApiKey) {
                 payload.api_key = this.geminiApiKey;
             }
