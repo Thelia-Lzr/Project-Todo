@@ -308,7 +308,7 @@ def gemini_chat():
         try:
             genai.configure(api_key=api_key)
         except Exception:
-            # If the admin_settings table does not exist yet, fall back to env vars silently
+            # Silently continue if configuration fails; errors will surface during actual API calls
             pass
 
         if session_id not in chat_sessions:

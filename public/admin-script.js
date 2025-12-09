@@ -617,7 +617,7 @@ class AdminApp {
         fragment.appendChild(placeholder);
 
         // Validate model IDs to contain only safe characters
-        const safeModelPattern = /^[a-zA-Z0-9\-_/:\.@]+$/;
+        const safeModelPattern = /^[a-zA-Z0-9\-_/:]+$/;
         
         options.forEach(modelId => {
             // Validate model ID format

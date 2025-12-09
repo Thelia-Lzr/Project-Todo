@@ -597,9 +597,11 @@ router.get('/api-quota', authMiddleware, verifyAdmin, async (req, res) => {
         if (service === 'deepseek') {
             serviceFilterClause = "AND model_name LIKE 'deepseek%'";
         } else if (service === 'openrouter') {
-            // OpenRouter model names can be like "openrouter/auto", "meta-llama/...", etc.
-            // Filter by common OpenRouter patterns or prefix
-            serviceFilterClause = "AND (model_name LIKE 'openrouter%' OR model_name LIKE 'meta-%' OR model_name LIKE '%/%')";
+            // OpenRouter model names can be like "openrouter/auto", "openrouter/deepseek-r1:free"
+            // or direct model names like "meta-llama/...", "google/...", "anthropic/...", etc.
+            // Since OpenRouter uses a wide variety of model name formats, we use a heuristic:
+            // exclude known non-OpenRouter patterns (gemini%, deepseek%) and check for common OpenRouter patterns
+            serviceFilterClause = "AND model_name NOT LIKE 'gemini%' AND model_name NOT LIKE 'deepseek%' AND (model_name LIKE 'openrouter%' OR model_name LIKE '%/%')";
         }
 
         let todayStats = {};
