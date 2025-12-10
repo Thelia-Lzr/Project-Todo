@@ -50,32 +50,16 @@
             </header>
 
             <main class="admin-main">
-            <!-- API Key 管理 -->
+            <!-- API 使用监控 -->
             <section class="admin-section">
                 <div class="section-header">
-                    <h2>🔑 API Key 管理</h2>
+                    <h2>📊 API 使用监控</h2>
                 </div>
-                <div class="api-key-management">
-                    <div class="api-key-card">
-                        <div class="api-key-info">
-                            <h3>当前 API Key</h3>
-                            <div class="api-key-display">
-                                <input type="password" id="currentApiKey" readonly>
-                                <button class="btn-icon" onclick="app.toggleApiKeyVisibility()" title="显示/隐藏">
-                                    👁️
-                                </button>
-                            </div>
-                            <button class="btn-secondary" onclick="app.showChangeApiKeyModal()">修改 API Key</button>
-                        </div>
-                        
-                        <div class="api-quota-info">
-                            <h3>使用配额</h3>
-                            <div id="quotaDisplay" class="quota-display">
-                                <div class="loading">加载中...</div>
-                            </div>
-                            <button class="btn-secondary" onclick="app.checkQuota()">🔄 刷新配额</button>
-                        </div>
+                <div class="api-quota-info">
+                    <div id="quotaDisplay" class="quota-display">
+                        <div class="loading">加载中...</div>
                     </div>
+                    <button class="btn-secondary" onclick="app.checkQuota()">🔄 刷新配额</button>
                 </div>
             </section>
 
@@ -111,6 +95,7 @@
                         <select id="aiServiceType">
                             <option value="gemini">Gemini (Google)</option>
                             <option value="deepseek">DeepSeek</option>
+                            <option value="openrouter">OpenRouter</option>
                         </select>
                     </div>
                     <div class="form-group" id="geminiApiKeyGroup">
@@ -123,6 +108,39 @@
                     </div>
                     <div class="form-group">
                         <button class="btn-primary" id="saveAiServiceBtn">保存设置</button>
+                    </div>
+
+                    <div class="openrouter-settings" id="openrouterSettingsSection" style="display: none;">
+                        <div class="openrouter-settings-header">
+                            <h3>⚙️ OpenRouter 配置</h3>
+                            <p class="form-hint">通过 OpenRouter 聚合模型时，需要提供 API Key 以及可选模型列表。</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="openrouterApiKey">OpenRouter API Key</label>
+                            <div class="api-key-display">
+                                <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off">
+                                <button type="button" class="btn-icon" id="toggleOpenrouterApiKey" title="显示/隐藏">
+                                    👁️
+                                </button>
+                            </div>
+                            <p class="form-hint">API Key 将安全保存在服务器端，仅管理员可查看与修改。</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="openrouterModelOptions">可用模型列表</label>
+                            <textarea id="openrouterModelOptions" rows="4" placeholder="每行一个模型 ID，例如：&#10;openrouter/deepseek-r1:free&#10;openrouter/qwen-plus&#10;meta-llama/llama-3-70b-instruct"></textarea>
+                            <p class="form-hint">按需输入允许使用的模型 ID（每行一个）。</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="openrouterDefaultModel">默认模型</label>
+                            <select id="openrouterDefaultModel">
+                                <option value="">请选择模型</option>
+                            </select>
+                            <p class="form-hint">上述模型列表将自动填充至此，选择系统默认使用的模型。</p>
+                        </div>
+                        <div class="form-group">
+                            <div class="error-msg" id="openrouterSettingsError"></div>
+                            <button type="button" class="btn-primary" id="saveOpenrouterSettingsBtn">保存 OpenRouter 设置</button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -202,33 +220,6 @@
         </div>
     </div>
 
-    <!-- 修改 API Key 模态框 -->
-    <div class="modal" id="changeApiKeyModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>修改 API Key</h3>
-                <button class="modal-close" onclick="app.closeChangeApiKeyModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>新的 API Key</label>
-                    <input type="text" id="newApiKey" placeholder="请输入新的 Gemini API Key">
-                </div>
-                <div class="form-group">
-                    <label>确认 API Key</label>
-                    <input type="text" id="confirmApiKey" placeholder="再次输入 API Key">
-                </div>
-                <div class="info-msg">
-                    ℹ️ API Key 将保存在服务器端的 .env 文件中
-                </div>
-                <div class="error-msg" id="changeApiKeyError"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="app.closeChangeApiKeyModal()">取消</button>
-                <button class="btn-primary" onclick="app.changeApiKey()">保存</button>
-            </div>
-        </div>
-    </div>
     </div>
 
     <script src="time-utils.js"></script>

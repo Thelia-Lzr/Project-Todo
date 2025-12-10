@@ -111,6 +111,13 @@ cp .env.example .env
 
 # 编辑 .env 文件，添加你的 Gemini API Key
 # GEMINI_API_KEY=your_gemini_api_key_here
+
+# （可选）启用 OpenRouter 支持
+# OPENROUTER_API_KEY=sk-or-v1-your-openrouter-key
+# OPENROUTER_DEFAULT_MODEL=openrouter/auto
+# OPENROUTER_MODEL_OPTIONS=["openrouter/deepseek-r1:free","meta-llama/llama-3-70b-instruct"]
+# OPENROUTER_REFERER=https://yourdomain.com
+# OPENROUTER_APP_NAME=TodoList AI Assistant
 ```
 
 **获取 Gemini API Key：**
@@ -156,7 +163,7 @@ pip install -r requirements.txt
 ```bash
 # 在项目根目录
 npm start
-# 服务器运行在 http://localhost:3000
+# 服务器运行在 http://localhost:${PORT}（.env 中的 PORT，默认 3000）
 ```
 
 **终端 2 - 启动 Python AI 服务：**
@@ -174,7 +181,7 @@ npm run dev
 ```
 
 ### 5. 访问应用
-打开浏览器访问：`http://localhost:3000`
+打开浏览器访问：`http://localhost:3000`（如有修改端口，请以 .env 中的 PORT 为准，默认 3000）
 
 ## 📖 使用指南
 
@@ -223,7 +230,7 @@ npm run dev
 
 #### 访问管理员面板
 1. 确保你是第一个注册的用户（管理员）
-2. 登录后访问 `http://localhost:3000/admin.html`
+2. 登录后访问 `http://localhost:${PORT}/admin.html`
 3. 输入管理员密码验证身份
 
 #### 用户管理
@@ -421,7 +428,7 @@ server {
     server_name yourdomain.com;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3000; # 请将 3000 替换为你实际配置的端口（如 .env 中的 PORT，默认 3000）
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';

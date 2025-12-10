@@ -391,12 +391,17 @@ body {
     padding: 30px;
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;  /* 改为auto允许水平滚动 */
     display: flex;
     flex-direction: column;
 }
 
 .todo-list {
+    display: block;  /* 改为block以支持表格显示 */
+    width: 100%;
+}
+
+.todo-list.list-mode {
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -412,6 +417,13 @@ body {
 .empty-state p,
 .loading-state p {
     font-size: 1.1rem;
+}
+
+/* 列表模式下的待办事项卡片 */
+.todo-list.list-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 /* 待办事项卡片 */
@@ -1213,6 +1225,64 @@ body {
     width: 100%;
     margin: 15px 0;
     font-size: 0.9em;
+}
+
+/* AI生成的表格样式 */
+.chat-message .ai-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 15px 0;
+    font-size: 0.9em;
+    background: white;
+    border: 1px solid #e0e0e0;
+}
+
+.chat-message .ai-table thead {
+    background: #f5f5f5;
+}
+
+.chat-message .ai-table th {
+    background: #f5f5f5;
+    font-weight: bold;
+    color: #202124;
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    text-align: left;
+}
+
+.chat-message .ai-table td {
+    border: 1px solid #e0e0e0;
+    padding: 10px;
+    text-align: left;
+    color: #202124;
+}
+
+.chat-message .ai-table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* 表格内的格式化文本 */
+.chat-message .ai-table strong {
+    font-weight: bold;
+    color: #202124;
+}
+
+.chat-message .ai-table em {
+    font-style: italic;
+    color: #5f6368;
+}
+
+.chat-message .ai-table code {
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.9em;
+}
+
+.chat-message .ai-table del {
+    color: #d32f2f;
+    text-decoration: line-through;
 }
 
 .chat-message th, .chat-message td {
@@ -2809,3 +2879,199 @@ body {
         padding-top: max(15px, env(safe-area-inset-top));
     }
 }
+
+/* ========== 表格视图样式 ========== */
+.stats-and-view {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 30px;
+    background: var(--light-bg);
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.stats {
+    display: flex;
+    gap: 30px;
+    flex: 1;
+    min-width: 200px;
+}
+
+.view-switcher {
+    display: flex;
+    gap: 8px;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.view-btn {
+    padding: 8px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    transition: all 0.2s ease;
+    color: var(--text-secondary);
+}
+
+.view-btn:hover {
+    background: var(--light-bg);
+}
+
+.view-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* 表格样式 */
+.todo-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 0.95rem;
+    display: table;  /* 确保表格显示模式 */
+    margin: 0;
+    padding: 0;
+}
+
+.todo-table thead {
+    background: var(--light-bg);
+    border-bottom: 2px solid var(--border-color);
+    display: table-header-group;
+}
+
+.todo-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    display: table-cell;
+}
+
+.todo-table tbody {
+    display: table-row-group;
+}
+
+.todo-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.2s ease;
+    display: table-row;
+}
+
+.todo-table tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+.todo-table td {
+    padding: 12px 16px;
+    color: var(--text-primary);
+    display: table-cell;
+}
+
+.todo-row.row-completed {
+    opacity: 0.7;
+    background: #f0fdf4;
+}
+
+.todo-row.row-completed td {
+    color: var(--text-secondary);
+}
+
+.todo-row.overdue td {
+    background-color: #fef2f2;
+    color: var(--danger-color);
+}
+
+.todo-row.soon td {
+    background-color: #fffbeb;
+}
+
+/* 状态徽章 */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-badge.completed {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.status-badge.pending {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+/* 时间状态 */
+.time-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.time-status.overdue {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.time-status.soon {
+    background: #fef08a;
+    color: #b45309;
+}
+
+.time-status.normal {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.time-status.no-date {
+    background: #f3f4f6;
+    color: var(--text-secondary);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .stats-and-view {
+        flex-direction: column-reverse;
+        gap: 10px;
+    }
+
+    .stats {
+        width: 100%;
+        justify-content: space-around;
+        gap: 20px;
+    }
+
+    .view-switcher {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .todo-table {
+        font-size: 0.85rem;
+    }
+
+    .todo-table th,
+    .todo-table td {
+        padding: 8px 12px;
+    }
+
+    .status-badge,
+    .time-status {
+        padding: 3px 8px;
+        font-size: 0.75rem;
+    }
+}
+
