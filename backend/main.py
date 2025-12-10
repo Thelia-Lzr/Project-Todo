@@ -29,6 +29,7 @@ DEFAULT_PORT = int(os.getenv('PORT', 5000))
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 OPENROUTER_REFERER = os.getenv('OPENROUTER_REFERER', 'https://github.com/Thelia-Lzr/Project-Todo')
 OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', 'TodoList AI Assistant')
+MAX_TOKENS_DEFAULT = int(os.getenv('MAX_TOKENS_DEFAULT', '900'))
 # Constants for OpenRouter settings keys
 openrouter_setting_keys = (
     'openrouter_api_key',
@@ -349,7 +350,7 @@ def deepseek_chat():
         user_id = data.get('user_id')
         model = data.get('model', DEEPSEEK_MODEL_DEFAULT)
         temperature = data.get('temperature', 0.3)
-        max_tokens = data.get('max_tokens', 800)
+        max_tokens = data.get('max_tokens', MAX_TOKENS_DEFAULT)
 
         system_prompt = build_system_prompt(todo_context, client_tz)
         messages = [
@@ -413,7 +414,7 @@ def openrouter_chat():
 
         # Validate max_tokens parameter
         try:
-            max_tokens = int(data.get('max_tokens', 900))
+            max_tokens = int(data.get('max_tokens', MAX_TOKENS_DEFAULT))
         except (TypeError, ValueError):
             max_tokens = 900
         if not (1 <= max_tokens <= 4096):
