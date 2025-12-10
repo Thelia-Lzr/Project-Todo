@@ -7,6 +7,9 @@ class AdminApp {
         this.sessions = [];
         this.verified = false;
         this.openrouterModelOptions = [];
+        // Constants for display limits
+        this.MAX_PREVIEW_MODELS = 6;
+        this.MAX_MODELS_TO_DISPLAY = 20;
         this.init();
     }
 
@@ -613,7 +616,16 @@ class AdminApp {
         placeholder.textContent = options.length ? '请选择模型' : '请先填写模型列表';
         fragment.appendChild(placeholder);
 
+        // Validate model IDs to contain only safe characters
+        const safeModelPattern = /^[a-zA-Z0-9\-_/:]+$/;
+        
         options.forEach(modelId => {
+            // Validate model ID format
+            if (!safeModelPattern.test(modelId)) {
+                console.warn(`Skipping invalid model ID: ${modelId}`);
+                return;
+            }
+            
             const option = document.createElement('option');
             option.value = modelId;
             option.textContent = modelId;
@@ -908,7 +920,7 @@ class AdminApp {
                 }
 
                 if (Array.isArray(data.models) && data.models.length > 0) {
-                    const previewModels = data.models.slice(0, 6);
+                    const previewModels = data.models.slice(0, this.MAX_PREVIEW_MODELS);
                     html += `
                     <div class="quota-section">
                         <div class="quota-section-title">🧠 可用模型</div>

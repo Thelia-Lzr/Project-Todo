@@ -131,15 +131,21 @@
                     <div id="successMsg" class="success-msg"></div>
                 </div>
 
-                <!-- 统计信息 -->
-                <div class="stats">
-                    <div class="stat-item">
-                        <span class="stat-label">总数：</span>
-                        <span id="totalCount" class="stat-value">0</span>
+                <!-- 统计信息和视图切换 -->
+                <div class="stats-and-view">
+                    <div class="stats">
+                        <div class="stat-item">
+                            <span class="stat-label">总数：</span>
+                            <span id="totalCount" class="stat-value">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">待完成：</span>
+                            <span id="pendingCount" class="stat-value">0</span>
+                        </div>
                     </div>
-                    <div class="stat-item">
-                        <span class="stat-label">待完成：</span>
-                        <span id="pendingCount" class="stat-value">0</span>
+                    <div class="view-switcher">
+                        <button id="listViewBtn" class="view-btn active" title="列表视图">📋</button>
+                        <button id="tableViewBtn" class="view-btn" title="表格视图">📊</button>
                     </div>
                 </div>
 

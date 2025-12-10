@@ -15,6 +15,7 @@ class TodoApp {
         this.sessionId = 'user_' + Date.now();  // 为每个会话创建唯一ID
     this.permissionCountdownTimer = null;
     this.currentPermission = null;
+        this.viewMode = localStorage.getItem('todoViewMode') || 'list';  // 'list' 或 'table'
         this.init();
     }
 
@@ -35,6 +36,9 @@ class TodoApp {
             if (savedUserId) {
                 this.userId = savedUserId;
             }
+            
+            // 初始化视图按钮状态
+            this.initializeViewMode();
             
             this.loadTodos();
             this.initAIChat();
@@ -96,6 +100,10 @@ class TodoApp {
         this.mobileTodoDateTime = document.getElementById('mobileTodoDateTime');
         this.mobileConfirmAdd = document.getElementById('mobileConfirmAdd');
         this.mobileErrorMsg = document.getElementById('mobileErrorMsg');
+
+        // 视图切换按钮
+        this.listViewBtn = document.getElementById('listViewBtn');
+        this.tableViewBtn = document.getElementById('tableViewBtn');
     }
 
     attachEventListeners() {
@@ -147,6 +155,14 @@ class TodoApp {
             if (e.key === 'Enter') this.addTodo();
         });
 
+        // 视图切换
+        if (this.listViewBtn) {
+            this.listViewBtn.addEventListener('click', () => this.switchToListView());
+        }
+        if (this.tableViewBtn) {
+            this.tableViewBtn.addEventListener('click', () => this.switchToTableView());
+        }
+
         // AI聊天相关
         this.saveApiKeyBtn.addEventListener('click', () => this.saveAndInitGemini());
         this.sendBtn.addEventListener('click', () => this.sendChatMessage());
@@ -169,6 +185,17 @@ class TodoApp {
     autoResizeTextarea(textarea) {
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    }
+
+    // 初始化视图模式按钮状态
+    initializeViewMode() {
+        if (this.viewMode === 'table') {
+            if (this.listViewBtn) this.listViewBtn.classList.remove('active');
+            if (this.tableViewBtn) this.tableViewBtn.classList.add('active');
+        } else {
+            if (this.listViewBtn) this.listViewBtn.classList.add('active');
+            if (this.tableViewBtn) this.tableViewBtn.classList.remove('active');
+        }
     }
 
     // ========== 认证相关 ==========
@@ -333,7 +360,8 @@ class TodoApp {
             return localStorage.getItem('adminDeepseekApiKey') || '';
         }
         if (service === 'openrouter') {
-            return localStorage.getItem('adminOpenrouterApiKey') || '';
+            // Do NOT retrieve OpenRouter API key from localStorage for security reasons.
+            return '';
         }
         // 默认返回 Gemini 管理员key或普通 geminiApiKey
         return localStorage.getItem('adminGeminiApiKey') || this.getGeminiApiKey();
@@ -712,10 +740,7 @@ class TodoApp {
                 }
             } else if (preferred === 'openrouter') {
                 endpoint = `${this.pythonBaseURL}/openrouter/chat`;
-                const openrouterKey = this.getAdminApiKey('openrouter');
-                if (openrouterKey) {
-                    payload.api_key = openrouterKey;
-                }
+                // Do NOT send OpenRouter API key from client; backend uses its own key.
             } else if (this.geminiApiKey) {
                 payload.api_key = this.geminiApiKey;
             }
@@ -1176,6 +1201,8 @@ class TodoApp {
         let inCodeBlock = false;
         let codeBuffer = [];
         let listType = null; // 'ul' 或 'ol'
+        let inTable = false;
+        let tableBuffer = [];
 
         const closeCodeBlock = () => {
             if (inCodeBlock) {
@@ -1192,6 +1219,17 @@ class TodoApp {
                 htmlParts.push('</ol>');
             }
             listType = null;
+        };
+
+        const closeTable = () => {
+            if (inTable && tableBuffer.length > 0) {
+                const tableHtml = this.parseTable(tableBuffer);
+                if (tableHtml) {
+                    htmlParts.push(tableHtml);
+                }
+                tableBuffer = [];
+                inTable = false;
+            }
         };
 
         const applyInline = (text) => {
@@ -1215,6 +1253,7 @@ class TodoApp {
                     closeCodeBlock();
                 } else {
                     closeList();
+                    closeTable();
                     inCodeBlock = true;
                     codeBuffer = [];
                 }
@@ -1226,8 +1265,29 @@ class TodoApp {
                 continue;
             }
 
+            // 检测表格行（包含|的行）
+            if (trimmed.includes('|')) {
+                const isTableRow = trimmed.split('|').length >= 2 && 
+                    (trimmed.startsWith('|') || !trimmed.startsWith('#'));
+                
+                if (isTableRow) {
+                    if (!inTable) {
+                        closeList();
+                        inTable = true;
+                    }
+                    tableBuffer.push(trimmed);
+                    continue;
+                }
+            }
+
+            // 如果不是表格行但之前在表格中，关闭表格
+            if (inTable && trimmed !== '') {
+                closeTable();
+            }
+
             if (trimmed === '') {
                 closeList();
+                closeTable();
                 htmlParts.push('');
                 continue;
             }
@@ -1235,6 +1295,7 @@ class TodoApp {
             const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
             if (headingMatch) {
                 closeList();
+                closeTable();
                 const level = headingMatch[1].length;
                 htmlParts.push(`<h${level}>${applyInline(headingMatch[2])}</h${level}>`);
                 continue;
@@ -1242,12 +1303,14 @@ class TodoApp {
 
             if (/^[-*_]{3,}$/.test(trimmed)) {
                 closeList();
+                closeTable();
                 htmlParts.push('<hr>');
                 continue;
             }
 
             if (trimmed.startsWith('>')) {
                 closeList();
+                closeTable();
                 const quote = trimmed.replace(/^>\s?/, '');
                 htmlParts.push(`<blockquote>${applyInline(quote)}</blockquote>`);
                 continue;
@@ -1255,6 +1318,7 @@ class TodoApp {
 
             const unorderedMatch = trimmed.match(/^[-*+]\s+(.*)$/);
             if (unorderedMatch) {
+                closeTable();
                 if (listType !== 'ul') {
                     closeList();
                     listType = 'ul';
@@ -1266,6 +1330,7 @@ class TodoApp {
 
             const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
             if (orderedMatch) {
+                closeTable();
                 if (listType !== 'ol') {
                     closeList();
                     listType = 'ol';
@@ -1276,13 +1341,86 @@ class TodoApp {
             }
 
             closeList();
+            closeTable();
             htmlParts.push(`<p>${applyInline(line)}</p>`);
         }
 
         closeCodeBlock();
         closeList();
+        closeTable();
 
         return htmlParts.filter(Boolean).join('');
+    }
+
+    // 解析文本表格为HTML表格
+    parseTable(tableLines) {
+        if (tableLines.length < 2) return null;
+
+        const rows = tableLines.map(line => {
+            // 移除前后的|符号，然后按|分割
+            return line.replace(/^\s*\|\s*|\s*\|\s*$/g, '').split('|').map(cell => cell.trim());
+        });
+
+        // 检查是否是分隔行（第二行应该是---|---|这样的）
+        let isHeaderRow = false;
+        let headerRowIndex = 0;
+        
+        if (rows.length >= 2) {
+            const secondRow = rows[1];
+            if (secondRow.every(cell => /^-+$/.test(cell) || /^:-+:?$/.test(cell) || /^:-+$/.test(cell) || /^-+:$/.test(cell))) {
+                isHeaderRow = true;
+                headerRowIndex = 1;
+            }
+        }
+
+        if (rows.length === 0) return null;
+
+        // 用于处理单元格内容的Markdown
+        const processCell = (cellContent) => {
+            let processed = this.escapeHtml(cellContent);
+            // 应用Markdown内联格式
+            processed = processed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');  // 粗体
+            processed = processed.replace(/__(.*?)__/g, '<strong>$1</strong>');       // 粗体
+            processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>');              // 斜体
+            processed = processed.replace(/_(.*?)_/g, '<em>$1</em>');                // 斜体
+            processed = processed.replace(/~~(.*?)~~/g, '<del>$1</del>');            // 删除线
+            processed = processed.replace(/`([^`]+)`/g, '<code>$1</code>');          // 代码
+            return processed;
+        };
+
+        let tableHtml = '<table class="ai-table">\n';
+
+        // 生成表头
+        if (isHeaderRow) {
+            tableHtml += '<thead>\n<tr>\n';
+            for (const cell of rows[0]) {
+                tableHtml += `<th>${processCell(cell)}</th>\n`;
+            }
+            tableHtml += '</tr>\n</thead>\n';
+            
+            // 生成表体（跳过头和分隔行）
+            tableHtml += '<tbody>\n';
+            for (let i = headerRowIndex + 1; i < rows.length; i++) {
+                tableHtml += '<tr>\n';
+                for (const cell of rows[i]) {
+                    tableHtml += `<td>${processCell(cell)}</td>\n`;
+                }
+                tableHtml += '</tr>\n';
+            }
+        } else {
+            // 没有分隔行的情况，所有行都作为数据行
+            tableHtml += '<tbody>\n';
+            for (const row of rows) {
+                tableHtml += '<tr>\n';
+                for (const cell of row) {
+                    tableHtml += `<td>${processCell(cell)}</td>\n`;
+                }
+                tableHtml += '</tr>\n';
+            }
+        }
+
+        tableHtml += '</tbody>\n</table>';
+        return tableHtml;
     }
 
     clearChatMessages() {
@@ -1528,7 +1666,11 @@ class TodoApp {
             console.log(`✅ 成功加载 ${data.todos.length} 条待办事项`);
             this.todos = data.todos || [];
             console.log('📋 当前todos数组:', this.todos);
-            this.render();
+            if (this.viewMode === 'table') {
+                this.renderTable();
+            } else {
+                this.render();
+            }
             console.log('🎨 渲染完成');
         } catch (error) {
             console.error('❌ 加载错误:', error);
@@ -1889,11 +2031,13 @@ class TodoApp {
         if (sortedTodos.length === 0) {
             console.log('📭 待办事项为空，显示空状态');
             this.todoList.innerHTML = `<div class="empty-state"><p>✨ 暂无待办事项，开始添加吧！</p></div>`;
+            this.todoList.classList.add('list-mode');
             this.updateStats();
             return;
         }
 
         console.log('📝 开始生成HTML...');
+        this.todoList.classList.add('list-mode');
         this.todoList.innerHTML = sortedTodos.map(todo => {
             const timeStatusClass = this.getTimeStatusClass(todo.due_date);
             const formattedTime = this.formatDateTime(todo.due_date);
@@ -1922,6 +2066,89 @@ class TodoApp {
         }).join('');
 
         this.updateStats();
+    }
+
+    renderTable() {
+        console.log('📊 开始渲染表格，当前todos数量:', this.todos.length);
+        const sortedTodos = this.getSortedTodos();
+        
+        if (sortedTodos.length === 0) {
+            console.log('📭 待办事项为空，显示空状态');
+            this.todoList.innerHTML = `<div class="empty-state"><p>✨ 暂无待办事项，开始添加吧！</p></div>`;
+            this.todoList.classList.remove('list-mode');
+            this.updateStats();
+            return;
+        }
+
+        let tableHTML = `
+            <table class="todo-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">✓</th>
+                        <th>ID</th>
+                        <th>状态</th>
+                        <th>任务</th>
+                        <th>截止 (本地)</th>
+                        <th>剩余/逾期</th>
+                        <th style="width: 60px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        sortedTodos.forEach(todo => {
+            const timeStatusClass = this.getTimeStatusClass(todo.due_date);
+            const formattedTime = this.formatDateTime(todo.due_date);
+            const timeStatusText = this.getTimeStatusText(todo.due_date);
+            const statusText = todo.completed ? '✓ 已完成' : '○ 未完成';
+            const statusClass = todo.completed ? 'completed' : 'pending';
+
+            tableHTML += `
+                <tr class="todo-row ${todo.completed ? 'row-completed' : ''} ${timeStatusClass}">
+                    <td style="text-align: center;">
+                        <input 
+                            type="checkbox" 
+                            class="checkbox" 
+                            ${todo.completed ? 'checked' : ''}
+                            onchange="app.toggleTodo(${todo.id}, ${todo.completed})"
+                        >
+                    </td>
+                    <td>${todo.id}</td>
+                    <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                    <td>${this.escapeHtml(todo.text)}</td>
+                    <td>${formattedTime}</td>
+                    <td><span class="time-status ${timeStatusClass}">${timeStatusText}</span></td>
+                    <td style="text-align: center;">
+                        <button class="btn-delete" onclick="app.deleteTodo(${todo.id})" title="删除">🗑️</button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tableHTML += `
+                </tbody>
+            </table>
+        `;
+
+        this.todoList.classList.remove('list-mode');
+        this.todoList.innerHTML = tableHTML;
+        this.updateStats();
+    }
+
+    switchToListView() {
+        this.viewMode = 'list';
+        localStorage.setItem('todoViewMode', 'list');
+        if (this.listViewBtn) this.listViewBtn.classList.add('active');
+        if (this.tableViewBtn) this.tableViewBtn.classList.remove('active');
+        this.render();
+    }
+
+    switchToTableView() {
+        this.viewMode = 'table';
+        localStorage.setItem('todoViewMode', 'table');
+        if (this.listViewBtn) this.listViewBtn.classList.remove('active');
+        if (this.tableViewBtn) this.tableViewBtn.classList.add('active');
+        this.renderTable();
     }
 
     // ========== ✅ AI 命令执行系统 ==========

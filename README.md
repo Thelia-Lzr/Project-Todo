@@ -181,7 +181,7 @@ npm run dev
 ```
 
 ### 5. 访问应用
-打开浏览器访问：`http://localhost:${PORT}`（.env 中的 PORT，默认 3000）
+打开浏览器访问：`http://localhost:3000`（如有修改端口，请以 .env 中的 PORT 为准，默认 3000）
 
 ## 📖 使用指南
 
@@ -428,7 +428,7 @@ server {
     server_name yourdomain.com;
 
     location / {
-        proxy_pass http://localhost:${PORT}; # 使用 .env 中的 PORT（默认 3000）
+        proxy_pass http://localhost:3000; # 请将 3000 替换为你实际配置的端口（如 .env 中的 PORT，默认 3000）
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
